@@ -6,6 +6,11 @@ import numpy as np
 
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
+        self.n_users = ratings['user'].nunique()
+        self.n_items = ratings['item'].nunique()
+        self.avg_users_dict = dict()
+        self.avg_items_dict = dict()
+        self.r_matrix_avg = 0
         self.initialize_predictor(ratings)
 
     @abc.abstractmethod
@@ -27,12 +32,31 @@ class Recommender(abc.ABC):
         :param true_ratings: DataFrame of the real ratings
         :return: RMSE score
         """
-        pass
+        n_users = true_ratings['user'].nunique()
+        n_items = true_ratings['item'].nunique()
+        item1 = 1 / (n_users * n_items)
+        curr_sum = 0
+        for user_id in range(n_users):
+            for item_id in range(n_items):
+                true_val = true_ratings[(true_ratings['user'] == user_id) & (true_ratings['item'] == item_id)]['rating'].values[0]
+                pred_val = self.r_matrix_avg + (self.avg_users_dict[user_id] - self.r_matrix_avg) + (self.avg_items_dict[item_id] - self.r_matrix_avg)
+                curr_sum += (true_val - pred_val)**2
+
+        return (item1*curr_sum)**0.5
 
 
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+        for user_idx in ratings['user'].unique():
+            r_user = list(ratings[ratings['user'] == user_idx]['rating'])
+            self.avg_users_dict[user_idx] = sum(r_user) / len(r_user)
+
+        for item_idx in ratings['item'].unique():
+            r_item = list(ratings[ratings['item'] == item_idx]['rating'])
+            self.avg_items_dict[item_idx] = sum(r_item) / len(r_item)
+
+        self.r_matrix_avg = sum(self.avg_users_dict.values()) / len(self.avg_users_dict.values())
+
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """

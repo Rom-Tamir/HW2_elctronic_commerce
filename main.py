@@ -50,6 +50,7 @@ def main():
     start = time.time()
 
     baseline_recommender = ex2.BaselineRecommender(train)
+    print(f'Took {time.time() - start:.2f}s')
     print(baseline_recommender.rmse(test))
     neighborhood_recommender = ex2.NeighborhoodRecommender(train)
     print(neighborhood_recommender.rmse(test))

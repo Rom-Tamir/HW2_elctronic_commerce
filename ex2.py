@@ -9,6 +9,7 @@ class Recommender(abc.ABC):
         self.avg_users_dict = dict()
         self.avg_items_dict = dict()
         self.r_matrix_avg = 0
+        self.r_matrix = None
         self.initialize_predictor(ratings)
 
     @abc.abstractmethod
@@ -34,7 +35,7 @@ class Recommender(abc.ABC):
         for idx, row in true_ratings.iterrows():
             sum_diff_2 += (row['rating'] - self.predict(row['user'], row['item'], 0))**2
 
-        r_size = 1 / (len(self.avg_users_dict)*len(self.avg_items_dict))
+        r_size = 1 / len(true_ratings['user'])
         return (r_size * sum_diff_2)**0.5
 
 
@@ -48,7 +49,7 @@ class BaselineRecommender(Recommender):
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
             self.avg_items_dict[item_idx] = sum(r_item) / len(r_item)
 
-        self.r_matrix_avg = sum(self.avg_users_dict.values()) / len(self.avg_users_dict.values())
+        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -66,7 +67,17 @@ class BaselineRecommender(Recommender):
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+        for user_idx in ratings['user'].unique():
+            r_user = list(ratings[ratings['user'] == user_idx]['rating'])
+            self.avg_users_dict[user_idx] = sum(r_user) / len(r_user)
+
+        for item_idx in ratings['item'].unique():
+            r_item = list(ratings[ratings['item'] == item_idx]['rating'])
+            self.avg_items_dict[item_idx] = sum(r_item) / len(r_item)
+
+        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
+        self.r_matrix = ratings
+        self.user_similarity(2, 7)
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -83,7 +94,27 @@ class NeighborhoodRecommender(Recommender):
         :param user2: User identifier
         :return: The correlation of the two users (between -1 and 1)
         """
-        pass
+        data_user1 = self.r_matrix[self.r_matrix['user'] == user1]
+        r_user1_centered = [r - self.r_matrix_avg for r in data_user1['rating']]
+        i_user1 = list(data_user1['item'])
+
+        data_user2 = self.r_matrix[self.r_matrix['user'] == user2]
+        r_user2_centered = [r - self.r_matrix_avg for r in data_user2['rating']]
+        i_user2 = list(data_user2['item'])
+
+        numarator = 0
+        r_1_norm = [r**2 for r in r_user1_centered]
+        #TODO: need to take care of the down
+        dumarator = sum()
+        for idx in range(len(i_user1)):
+            curr_item = i_user1[idx]
+            if curr_item in i_user2:
+                curr_item_user_2 = i_user2.index(curr_item)
+                numarator += r_user1_centered[idx]*r_user2_centered[curr_item_user_2]
+
+
+
+
 
 
 class LSRecommender(Recommender):

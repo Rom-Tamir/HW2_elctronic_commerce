@@ -6,8 +6,6 @@ import numpy as np
 
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
-        self.n_users = ratings['user'].nunique()
-        self.n_items = ratings['item'].nunique()
         self.avg_users_dict = dict()
         self.avg_items_dict = dict()
         self.r_matrix_avg = 0
@@ -32,17 +30,12 @@ class Recommender(abc.ABC):
         :param true_ratings: DataFrame of the real ratings
         :return: RMSE score
         """
-        n_users = true_ratings['user'].nunique()
-        n_items = true_ratings['item'].nunique()
-        item1 = 1 / (n_users * n_items)
-        curr_sum = 0
-        for user_id in range(n_users):
-            for item_id in range(n_items):
-                true_val = true_ratings[(true_ratings['user'] == user_id) & (true_ratings['item'] == item_id)]['rating'].values[0]
-                pred_val = self.r_matrix_avg + (self.avg_users_dict[user_id] - self.r_matrix_avg) + (self.avg_items_dict[item_id] - self.r_matrix_avg)
-                curr_sum += (true_val - pred_val)**2
+        sum_diff_2 = 0
+        for idx, row in true_ratings.iterrows():
+            sum_diff_2 += (row['rating'] - self.predict(row['user'], row['item'], 0))**2
 
-        return (item1*curr_sum)**0.5
+        r_size = 1 / (len(self.avg_users_dict)*len(self.avg_items_dict))
+        return (r_size * sum_diff_2)**0.5
 
 
 class BaselineRecommender(Recommender):
@@ -65,7 +58,10 @@ class BaselineRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        pass
+        b_u = self.avg_users_dict[user] - self.r_matrix_avg if user in self.avg_users_dict else 0
+        b_i = self.avg_items_dict[item] - self.r_matrix_avg if item in self.avg_items_dict else 0
+        predicted_rating = self.r_matrix_avg + b_u + b_i
+        return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
 
 class NeighborhoodRecommender(Recommender):

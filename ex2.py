@@ -20,7 +20,8 @@ class Recommender(abc.ABC):
         self.sol = None
         self.n_users = 0
         self.corr_matrix = None
-        self.matrix_to_corr = None
+        self.similarity_dict = dict()
+        self.another_try = None
         self.initialize_predictor(ratings)
 
     @abc.abstractmethod
@@ -80,18 +81,61 @@ class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
         self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         unique_users = ratings['user'].unique()
+        max_user = int(max(unique_users)) + 1
         for user_idx in unique_users:
-            r_user = list(ratings[ratings['user'] == user_idx]['rating'])
+            r_user = ratings[ratings['user'] == user_idx]['rating']
             avg_user = sum(r_user) / len(r_user)
             self.b_u_dict[user_idx] = avg_user - self.r_matrix_avg
 
         unique_items = ratings['item'].unique()
+        max_item = int(max(unique_items)) + 1
         for item_idx in unique_items:
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
             avg_item = sum(r_item) / len(r_item)
             self.b_i_dict[item_idx] = avg_item - self.r_matrix_avg
 
-        max_user = int(max(unique_users) + 1)
+        # similarity part
+
+        """for user_idx in unique_users:
+            print(user_idx)
+            r_i_user = ratings[ratings['user'] == user_idx][['item', 'rating']]
+            for other_user_idx in unique_users:
+                if user_idx > other_user_idx:
+                    r_i_other_user = ratings[(ratings['user'] == other_user_idx) & (ratings['item'].isin(r_i_user.item))][['item', 'rating']]
+                    if len(r_i_other_user) == 0:
+                        self.similarity_dict[(user_idx, other_user_idx)] = 0
+                        self.similarity_dict[(other_user_idx, user_idx)] = 0
+                        continue
+                    r_user_consider = r_i_user[r_i_user['item'].isin(r_i_other_user.item)]['rating'].values[0] - self.r_matrix_avg
+                    r_other_user_consider = r_i_other_user['rating'].values[0] - self.r_matrix_avg
+                    self.similarity_dict[(user_idx, other_user_idx)] = np.inner(r_user_consider, r_other_user_consider) / (np.linalg.norm(r_user_consider) * np.linalg.norm(r_other_user_consider))
+                    self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]"""
+
+
+
+        # another try
+
+        self.another_try = np.zeros((max_user, max_item))
+        for idx, row in ratings.iterrows():
+            self.another_try[int(row['user'])][int(row['item'])] = row['rating'] - self.r_matrix_avg
+
+        for user_idx in unique_users:
+            for other_user_idx in unique_users:
+                if user_idx > other_user_idx:
+                    user1_items = np.where(self.another_try[int(user_idx)] != 0)[0]
+                    user2_items = np.where(self.another_try[int(other_user_idx)] != 0)[0]
+                    mutual_items = np.intersect1d(user1_items, user2_items, assume_unique=True)
+                    if len(mutual_items) == 0:
+                        self.similarity_dict[(user_idx, other_user_idx)] = 0
+                        self.similarity_dict[(other_user_idx, user_idx)] = 0
+                        continue
+                    user_1_rating_consider = self.another_try[int(user_idx)][mutual_items]
+                    user_2_rating_consider = self.another_try[int(other_user_idx)][mutual_items]
+                    self.similarity_dict[(user_idx, other_user_idx)] = np.inner(user_1_rating_consider, user_2_rating_consider) / (np.linalg.norm(user_1_rating_consider) * np.linalg.norm(user_2_rating_consider))
+                    self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]
+
+
+        """max_user = int(max(unique_users) + 1)
         max_item = int(max(unique_items) + 1)
         self.matrix_to_corr = np.zeros((max_item, max_user))
         # matrix_to_corr[:] = np.nan
@@ -100,7 +144,7 @@ class NeighborhoodRecommender(Recommender):
 
         df_to_corr = pd.DataFrame(self.matrix_to_corr)
         self.corr_matrix = df_to_corr.corr()
-        # self.corr_matrix = self.corr_matrix.fillna(0)
+        # self.corr_matrix = self.corr_matrix.fillna(0)"""
         self.r_matrix = ratings
 
 
@@ -120,20 +164,16 @@ class NeighborhoodRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        potential_users = self.r_matrix[(self.r_matrix.user != user) & (self.r_matrix.item == item)]['user']
+        potential_users = self.r_matrix[(self.r_matrix.user != user) & (self.r_matrix.item == item)]['user'].unique()
         potential_users_similarities = []
         for other_user in potential_users:
-            potential_users_similarities.append((self.corr_matrix[user][other_user], other_user))
-            # print(f"matrix val: {self.corr_matrix[user][other_user]}")
-            # print(self.user_similarity(user, other_user))
-            # print("new row!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
+            potential_users_similarities.append((self.similarity_dict[(user, other_user)], other_user))
         potential_users_similarities.sort(key=lambda x: x[0], reverse=True)
         top_3_lst = potential_users_similarities[:3]
         numerator = 0
         denominator = 0
         for similarity, user_idx in top_3_lst:
-            r_wave_other_user = self.matrix_to_corr[int(item)][int(user_idx)]
+            r_wave_other_user = self.another_try[int(user_idx)][int(item)]
             numerator += r_wave_other_user * similarity
             denominator += abs(similarity)
 

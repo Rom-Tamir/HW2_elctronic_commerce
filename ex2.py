@@ -3,25 +3,19 @@ import datetime
 from typing import Tuple
 import pandas as pd
 import numpy as np
-import sklearn as sk
 
 
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
-        self.avg_users_dict = dict()
-        self.avg_items_dict = dict()
         self.r_matrix_avg = 0
         self.r_matrix = None
         self.b_i_dict = dict()
         self.b_u_dict = dict()
-        self.similarity_matrix = dict()
-        self.users_to_calc = None
         self.rating_centered = None
         self.sol = None
         self.n_users = 0
-        self.corr_matrix = None
         self.similarity_dict = dict()
-        self.another_try = None
+        self.r_wave_matrix = None
         self.initialize_predictor(ratings)
 
     @abc.abstractmethod
@@ -53,15 +47,16 @@ class Recommender(abc.ABC):
 
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
+        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         for user_idx in ratings['user'].unique():
             r_user = list(ratings[ratings['user'] == user_idx]['rating'])
-            self.avg_users_dict[user_idx] = sum(r_user) / len(r_user)
+            avg_user = sum(r_user) / len(r_user)
+            self.b_u_dict[user_idx] = avg_user - self.r_matrix_avg
 
         for item_idx in ratings['item'].unique():
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
-            self.avg_items_dict[item_idx] = sum(r_item) / len(r_item)
-
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
+            avg_item = sum(r_item) / len(r_item)
+            self.b_i_dict[item_idx] = avg_item - self.r_matrix_avg
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -71,8 +66,8 @@ class BaselineRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        b_u = self.avg_users_dict[user] - self.r_matrix_avg if user in self.avg_users_dict else 0
-        b_i = self.avg_items_dict[item] - self.r_matrix_avg if item in self.avg_items_dict else 0
+        b_u = self.b_u_dict[user] if user in self.b_u_dict else 0
+        b_i = self.b_i_dict[item] if item in self.b_i_dict else 0
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
@@ -96,25 +91,6 @@ class NeighborhoodRecommender(Recommender):
 
         # similarity part
 
-        """for user_idx in unique_users:
-            print(user_idx)
-            r_i_user = ratings[ratings['user'] == user_idx][['item', 'rating']]
-            for other_user_idx in unique_users:
-                if user_idx > other_user_idx:
-                    r_i_other_user = ratings[(ratings['user'] == other_user_idx) & (ratings['item'].isin(r_i_user.item))][['item', 'rating']]
-                    if len(r_i_other_user) == 0:
-                        self.similarity_dict[(user_idx, other_user_idx)] = 0
-                        self.similarity_dict[(other_user_idx, user_idx)] = 0
-                        continue
-                    r_user_consider = r_i_user[r_i_user['item'].isin(r_i_other_user.item)]['rating'].values[0] - self.r_matrix_avg
-                    r_other_user_consider = r_i_other_user['rating'].values[0] - self.r_matrix_avg
-                    self.similarity_dict[(user_idx, other_user_idx)] = np.inner(r_user_consider, r_other_user_consider) / (np.linalg.norm(r_user_consider) * np.linalg.norm(r_other_user_consider))
-                    self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]"""
-
-
-
-        # another try
-
         self.another_try = np.zeros((max_user, max_item))
         for idx, row in ratings.iterrows():
             self.another_try[int(row['user'])][int(row['item'])] = row['rating'] - self.r_matrix_avg
@@ -134,27 +110,7 @@ class NeighborhoodRecommender(Recommender):
                     self.similarity_dict[(user_idx, other_user_idx)] = np.inner(user_1_rating_consider, user_2_rating_consider) / (np.linalg.norm(user_1_rating_consider) * np.linalg.norm(user_2_rating_consider))
                     self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]
 
-
-        """max_user = int(max(unique_users) + 1)
-        max_item = int(max(unique_items) + 1)
-        self.matrix_to_corr = np.zeros((max_item, max_user))
-        # matrix_to_corr[:] = np.nan
-        for idx, row in ratings.iterrows():
-            self.matrix_to_corr[int(row['item'])][int(row['user'])] = row['rating'] - self.r_matrix_avg
-
-        df_to_corr = pd.DataFrame(self.matrix_to_corr)
-        self.corr_matrix = df_to_corr.corr()
-        # self.corr_matrix = self.corr_matrix.fillna(0)"""
         self.r_matrix = ratings
-
-
-
-
-        """for user1 in ratings['user'].unique():
-            for user2 in ratings['user'].unique():
-                if user1 < user2:
-                    self.similarity_matrix[(user1, user2)] = self.user_similarity(user1, user2)"""
-
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -188,32 +144,7 @@ class NeighborhoodRecommender(Recommender):
         :param user2: User identifier
         :return: The correlation of the two users (between -1 and 1)
         """
-        data_user1 = self.r_matrix[self.r_matrix['user'] == user1][['rating', 'item']]
-        r_user1_centered = [row['rating'] - (self.r_matrix_avg + self.b_u_dict[user1] + self.b_i_dict[row['item']]) for idx, row in data_user1.iterrows()]
-        i_user1 = list(data_user1['item'])
-
-        data_user2 = self.r_matrix[self.r_matrix['user'] == user2][['rating', 'item']]
-        r_user2_centered = [row['rating'] - (self.r_matrix_avg + self.b_u_dict[user2] + self.b_i_dict[row['item']]) for idx, row in data_user2.iterrows()]
-        i_user2 = list(data_user2['item'])
-
-        numerator = 0
-        r_1_norm = 0
-        r_2_norm = 0
-        for idx in range(len(i_user1)):
-            curr_item = i_user1[idx]
-            if curr_item in i_user2:
-                curr_item_user_2 = i_user2.index(curr_item)
-                numerator += r_user1_centered[idx]*r_user2_centered[curr_item_user_2]
-                r_1_norm += r_user1_centered[idx]**2
-                r_2_norm += r_user2_centered[curr_item_user_2]**2
-
-        denominator = (r_1_norm * r_2_norm)**0.5
-
-        return numerator / denominator if denominator > 0 else 0
-
-
-
-
+        return self.similarity_dict[(user1, user2)] if (user1, user2) in self.similarity_dict else 0
 
 
 class LSRecommender(Recommender):
@@ -249,22 +180,23 @@ class LSRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        self.sol = np.linalg.lstsq(self.r_matrix, np.array(self.rating_centered))[0]
+        self.sol = np.linalg.lstsq(self.r_matrix, np.array(self.rating_centered), rcond=None)[0]
 
         return self.r_matrix, self.sol, self.rating_centered
 
 
 class CompetitionRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
+        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         for user_idx in ratings['user'].unique():
             r_user = list(ratings[ratings['user'] == user_idx]['rating'])
-            self.avg_users_dict[user_idx] = sum(r_user) / len(r_user)
+            avg_user = sum(r_user) / len(r_user)
+            self.b_u_dict[user_idx] = avg_user - self.r_matrix_avg
 
         for item_idx in ratings['item'].unique():
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
-            self.avg_items_dict[item_idx] = sum(r_item) / len(r_item)
-
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
+            avg_item = sum(r_item) / len(r_item)
+            self.b_i_dict[item_idx] = avg_item - self.r_matrix_avg
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -273,8 +205,8 @@ class CompetitionRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        b_u = self.avg_users_dict[user] - self.r_matrix_avg if user in self.avg_users_dict else 0
-        b_i = self.avg_items_dict[item] - self.r_matrix_avg if item in self.avg_items_dict else 0
+        b_u = self.b_u_dict[user] if user in self.b_u_dict else 0
+        b_i = self.b_i_dict[item] if item in self.b_i_dict else 0
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 

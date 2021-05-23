@@ -7,7 +7,7 @@ import numpy as np
 
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
-        self.r_matrix_avg = 0
+        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         self.r_matrix = None
         self.b_i_dict = dict()
         self.b_u_dict = dict()
@@ -47,7 +47,6 @@ class Recommender(abc.ABC):
 
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         for user_idx in ratings['user'].unique():
             r_user = list(ratings[ratings['user'] == user_idx]['rating'])
             avg_user = sum(r_user) / len(r_user)
@@ -74,7 +73,6 @@ class BaselineRecommender(Recommender):
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         unique_users = ratings['user'].unique()
         max_user = int(max(unique_users)) + 1
         for user_idx in unique_users:
@@ -91,22 +89,22 @@ class NeighborhoodRecommender(Recommender):
 
         # similarity part
 
-        self.another_try = np.zeros((max_user, max_item))
+        self.r_wave_matrix = np.zeros((max_user, max_item))
         for idx, row in ratings.iterrows():
-            self.another_try[int(row['user'])][int(row['item'])] = row['rating'] - self.r_matrix_avg
+            self.r_wave_matrix[int(row['user'])][int(row['item'])] = row['rating'] - self.r_matrix_avg
 
         for user_idx in unique_users:
             for other_user_idx in unique_users:
                 if user_idx > other_user_idx:
-                    user1_items = np.where(self.another_try[int(user_idx)] != 0)[0]
-                    user2_items = np.where(self.another_try[int(other_user_idx)] != 0)[0]
+                    user1_items = np.where(self.r_wave_matrix[int(user_idx)] != 0)[0]
+                    user2_items = np.where(self.r_wave_matrix[int(other_user_idx)] != 0)[0]
                     mutual_items = np.intersect1d(user1_items, user2_items, assume_unique=True)
                     if len(mutual_items) == 0:
                         self.similarity_dict[(user_idx, other_user_idx)] = 0
                         self.similarity_dict[(other_user_idx, user_idx)] = 0
                         continue
-                    user_1_rating_consider = self.another_try[int(user_idx)][mutual_items]
-                    user_2_rating_consider = self.another_try[int(other_user_idx)][mutual_items]
+                    user_1_rating_consider = self.r_wave_matrix[int(user_idx)][mutual_items]
+                    user_2_rating_consider = self.r_wave_matrix[int(other_user_idx)][mutual_items]
                     self.similarity_dict[(user_idx, other_user_idx)] = np.inner(user_1_rating_consider, user_2_rating_consider) / (np.linalg.norm(user_1_rating_consider) * np.linalg.norm(user_2_rating_consider))
                     self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]
 
@@ -124,12 +122,12 @@ class NeighborhoodRecommender(Recommender):
         potential_users_similarities = []
         for other_user in potential_users:
             potential_users_similarities.append((self.similarity_dict[(user, other_user)], other_user))
-        potential_users_similarities.sort(key=lambda x: x[0], reverse=True)
+        potential_users_similarities.sort(key=lambda x: abs(x[0]), reverse=True)
         top_3_lst = potential_users_similarities[:3]
         numerator = 0
         denominator = 0
         for similarity, user_idx in top_3_lst:
-            r_wave_other_user = self.another_try[int(user_idx)][int(item)]
+            r_wave_other_user = self.r_wave_matrix[int(user_idx)][int(item)]
             numerator += r_wave_other_user * similarity
             denominator += abs(similarity)
 
@@ -163,7 +161,6 @@ class LSRecommender(Recommender):
             self.r_matrix[idx][-3] = 1 if 6 <= curr_timestamp.hour < 18 else 0
             self.r_matrix[idx][-2] = 1 if self.r_matrix[idx, -3] == 0 else 0
 
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         self.rating_centered = np.array(ratings['rating']) - self.r_matrix_avg
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -187,7 +184,6 @@ class LSRecommender(Recommender):
 
 class CompetitionRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         for user_idx in ratings['user'].unique():
             r_user = list(ratings[ratings['user'] == user_idx]['rating'])
             avg_user = sum(r_user) / len(r_user)

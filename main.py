@@ -50,21 +50,20 @@ def main():
     start = time.time()
 
     baseline_recommender = ex2.BaselineRecommender(train)
-    #print(f'Took {time.time() - start:.2f}s')
     print(baseline_recommender.rmse(test))
     neighborhood_recommender = ex2.NeighborhoodRecommender(train)
-    print(f'Took {time.time() - start:.2f}s')
-    print(neighborhood_recommender.user_similarity(3, 55))
     print(neighborhood_recommender.rmse(test))
     print(f'Took {time.time() - start:.2f}s')
+    start = time.time()
     ls_recommender = ex2.LSRecommender(train)
     ls_recommender.solve_ls()
     print(ls_recommender.rmse(test))
-
-    #ratings_comp = pd.read_csv('ratings_comp.csv')
-    #train, test = train_test_split(ratings_comp)
-    #comp_recommender = ex2.CompetitionRecommender(train)
-    #print(comp_recommender.rmse(test))
+    print(f'Took {time.time() - start:.2f}s')
+    start = time.time()
+    ratings_comp = pd.read_csv('ratings_comp.csv')
+    train, test = train_test_split(ratings_comp)
+    comp_recommender = ex2.CompetitionRecommender(train)
+    print(comp_recommender.rmse(test))
 
     print(f'Took {time.time() - start:.2f}s')
 

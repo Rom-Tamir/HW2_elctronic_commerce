@@ -94,6 +94,7 @@ class NeighborhoodRecommender(Recommender):
             self.r_wave_matrix[int(row['user'])][int(row['item'])] = row['rating'] - self.r_matrix_avg
 
         for user_idx in unique_users:
+            self.similarity_dict[(user_idx, user_idx)] = 1
             for other_user_idx in unique_users:
                 if user_idx > other_user_idx:
                     user1_items = np.where(self.r_wave_matrix[int(user_idx)] != 0)[0]

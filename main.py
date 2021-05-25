@@ -60,7 +60,7 @@ def main():
     print(ls_recommender.rmse(test))
     print(f'Took {time.time() - start:.2f}s')
     start = time.time()
-    ratings_comp = pd.read_csv('ratings_comp.csv')
+    ratings_comp = transform(pd.read_csv('ratings_comp.csv'))
     train, test = train_test_split(ratings_comp)
     comp_recommender = ex2_312546609_312575970.CompetitionRecommender(train)
     print(comp_recommender.rmse(test))

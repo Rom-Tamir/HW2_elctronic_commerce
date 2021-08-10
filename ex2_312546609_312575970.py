@@ -207,3 +207,102 @@ class CompetitionRecommender(Recommender):
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
+
+
+class MFRecommender(Recommender):
+    def __init__(self, R, K, alpha, beta, iterations):
+        """
+               Perform matrix factorization to predict empty
+               entries in a matrix.
+               Arguments
+               - R (ndarray)   : user-item rating matrix
+               - K (int)       : number of latent dimensions
+               - alpha (float) : learning rate
+               - beta (float)  : regularization parameter
+               """
+        super().__init__(R)
+
+        self.K = K
+        self.alpha = alpha
+        self.beta = beta
+        self.iterations = iterations
+
+
+    def initialize_predictor(self, ratings):
+        n_users = int(max(ratings['user']) + 1)
+        n_items = int(max(ratings['item']) + 1)
+        self.b_u = np.zeros(n_users)
+        self.b_m = np.zeros(n_items)
+
+        for user_idx in ratings['user'].unique():
+            r_user = list(ratings[ratings['user'] == user_idx]['rating'])
+            avg_user = sum(r_user) / len(r_user)
+            self.b_u[user_idx] = avg_user - self.r_matrix_avg
+
+        for item_idx in ratings['item'].unique():
+            r_item = list(ratings[ratings['item'] == item_idx]['rating'])
+            avg_item = sum(r_item) / len(r_item)
+            self.b_m[item_idx] = avg_item - self.r_matrix_avg
+
+
+
+        self.r_matrix = np.zeros((n_users, n_items))
+        for idx, row in ratings.iterrows():
+            curr_user = int(row['user'])
+            curr_item = int(row['item'])
+            self.r_matrix[curr_user][curr_item] = float(row['rating'])
+
+        # Initialize user and item latent feature matrice
+        self.P = np.random.normal(scale=1. / self.K, size=(n_users, self.K))
+        self.Q = np.random.normal(scale=1. / self.K, size=(n_items, self.K))
+
+        self.samples = [
+            (i, j, self.r_matrix[i, j])
+            for i in range(n_users)
+            for j in range(n_items)
+            if self.r_matrix[i, j] > 0
+        ]
+
+        training_process = []
+        for i in range(self.iterations):
+            np.random.shuffle(self.samples)
+            self.sgd()
+            rmse = self.rmse() ###################################### TODO: need to get the test from the c'tor
+            training_process.append((i, rmse))
+            # if (i+1) % 100 == 0:
+            #    print("Iteration: %d ; error = %.4f" % (i+1, mse))
+
+        return training_process
+
+    def sgd(self):
+        """
+        Perform stochastic graident descent
+        """
+        for user, item, rating in self.samples:
+            # Computer prediction and error
+            prediction = self.predict(user, item, 0)
+            error = rating - prediction
+
+            # Update biases
+            self.b_u[user] += self.alpha * (error - self.beta * self.b_u[user])
+            self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
+
+            # Update user and item latent feature matrices
+            self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
+            self.Q[item, :] += self.alpha * (error * self.P[user, :] - self.beta * self.Q[item, :])
+
+    def predict(self, user: int, item: int, timestamp: int) -> float:
+        """
+        :param user: User identifier
+        :param item: Item identifier
+        :param timestamp: Rating timestamp
+        :return: Predicted rating of the user for the item
+        """
+        predicted_rating = self.r_matrix_avg + self.b_u[user] + self.b_m[item] + self.P[user, :].dot(self.Q[item, :].T)
+        return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
+
+
+
+
+
+

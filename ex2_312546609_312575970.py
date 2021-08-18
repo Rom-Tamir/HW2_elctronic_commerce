@@ -44,6 +44,23 @@ class Recommender(abc.ABC):
         r_size = 1 / len(true_ratings['user'])
         return (r_size * sum_diff_2)**0.5
 
+    def omer_rmse(self, true_ratings) -> float:
+        user_col = true_ratings["user"].tolist()
+        item_col = true_ratings["item"].tolist()
+        rating_col = true_ratings["rating"].tolist()
+        timestamp_col = true_ratings["timestamp"].tolist()
+
+        sum_rmse = 0
+        for idx in range(len(user_col)):
+            sum_rmse += (rating_col[idx] - self.predict(int(user_col[idx]), int(item_col[idx]), int(timestamp_col[idx]))) ** 2
+
+        if len(user_col) != 0:
+            rmse = np.sqrt((1 / len(user_col)) * sum_rmse)
+        else:
+            rmse = 0
+
+        return rmse
+
 
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
@@ -210,7 +227,7 @@ class CompetitionRecommender(Recommender):
 
 
 class MFRecommender(Recommender):
-    def __init__(self, R, K, alpha, beta, iterations):
+    def __init__(self, R, K=10, alpha=0.01, beta=0.01, iterations=10):
         """
                Perform matrix factorization to predict empty
                entries in a matrix.
@@ -220,12 +237,12 @@ class MFRecommender(Recommender):
                - alpha (float) : learning rate
                - beta (float)  : regularization parameter
                """
-        super().__init__(R)
-
         self.K = K
         self.alpha = alpha
         self.beta = beta
         self.iterations = iterations
+        self.count = 0
+        super().__init__(R)
 
 
     def initialize_predictor(self, ratings):
@@ -237,12 +254,12 @@ class MFRecommender(Recommender):
         for user_idx in ratings['user'].unique():
             r_user = list(ratings[ratings['user'] == user_idx]['rating'])
             avg_user = sum(r_user) / len(r_user)
-            self.b_u[user_idx] = avg_user - self.r_matrix_avg
+            self.b_u[int(user_idx)] = avg_user - self.r_matrix_avg
 
         for item_idx in ratings['item'].unique():
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
             avg_item = sum(r_item) / len(r_item)
-            self.b_m[item_idx] = avg_item - self.r_matrix_avg
+            self.b_m[int(item_idx)] = avg_item - self.r_matrix_avg
 
 
 
@@ -267,8 +284,8 @@ class MFRecommender(Recommender):
         for i in range(self.iterations):
             np.random.shuffle(self.samples)
             self.sgd()
-            rmse = self.rmse() ###################################### TODO: need to get the test from the c'tor
-            training_process.append((i, rmse))
+            rmse = self.omer_rmse(ratings)
+            training_process.append((i, rmse, mf_params(self.Q, self.P, self.b_u, self.b_m)))
             # if (i+1) % 100 == 0:
             #    print("Iteration: %d ; error = %.4f" % (i+1, mse))
 
@@ -278,6 +295,8 @@ class MFRecommender(Recommender):
         """
         Perform stochastic graident descent
         """
+        print(f"SGD num: {self.count}")
+        self.count += 1
         for user, item, rating in self.samples:
             # Computer prediction and error
             prediction = self.predict(user, item, 0)
@@ -298,10 +317,33 @@ class MFRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        predicted_rating = self.r_matrix_avg + self.b_u[user] + self.b_m[item] + self.P[user, :].dot(self.Q[item, :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
+    def mf_rmse(self):
+        """
+        A function to compute the total mean square error
+        """
+        xs, ys = self.r_matrix.nonzero()
+        predicted_matrix = self.full_matrix()
+        error = 0
+        for x, y in zip(xs, ys):
+            error += (self.r_matrix[x, y] - predicted_matrix[x, y])**2
+        return error**0.5
 
+    def full_matrix(self):
+        """
+        Computer the full matrix using the resultant biases, P and Q
+        """
+        return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
+
+
+class mf_params:
+    def __init__(self, Q, P, b_u, b_m):
+        self.Q = np.copy(Q)
+        self.P = np.copy(P)
+        self.b_u = np.copy(b_u)
+        self.b_m = np.copy(b_m)
 
 
 

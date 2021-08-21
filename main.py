@@ -61,14 +61,15 @@ def main():
     print(neighborhood_recommender.rmse(test))
     print(f'Took {time.time() - start:.2f}s')"""
 
-    """start = time.time()
+    start = time.time()
     ls_recommender = ex2_312546609_312575970.LSRecommender(train)
     ls_recommender.solve_ls()
     print(ls_recommender.rmse(test))
-    print(f'Took {time.time() - start:.2f}s')"""
+    print(f'Took {time.time() - start:.2f}s')
 
     """start = time.time()
-    mf_recommender = ex2_312546609_312575970.MFRecommender(train)
+    optimal_params = ex2_312546609_312575970.MFRecommender.hyperparameters_tuning(train)
+    mf_recommender = ex2_312546609_312575970.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
     print(mf_recommender.omer_rmse(test))
     print(f'Took {time.time() - start:.2f}s')"""
 

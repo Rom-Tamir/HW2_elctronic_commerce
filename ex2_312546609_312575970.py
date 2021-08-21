@@ -3,6 +3,7 @@ import datetime
 from typing import Tuple
 import pandas as pd
 import numpy as np
+from itertools import product
 
 
 class Recommender(abc.ABC):
@@ -250,7 +251,7 @@ class CompetitionRecommender(Recommender):
 
 
 class MFRecommender(Recommender):
-    def __init__(self, R, K=10, alpha=0.01, beta=0.01, iterations=10):
+    def __init__(self, R, K=100, alpha=0.01, beta=0.01, iterations=50):
         """
                Perform matrix factorization to predict empty
                entries in a matrix.
@@ -318,7 +319,7 @@ class MFRecommender(Recommender):
         """
         Perform stochastic graident descent
         """
-        print(f"SGD num: {self.count}")
+        #print(f"SGD num: {self.count}")
         self.count += 1
         for user, item, rating in self.samples:
             # Computer prediction and error
@@ -360,6 +361,46 @@ class MFRecommender(Recommender):
         """
         return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
 
+    @staticmethod
+    def cross_validation_error(df, combination_of_params, folds):
+        # Create folds
+        X_folds = np.array_split(df, folds)
+        train_results, val_results = [], []
+
+        for i in range(folds):
+            # Create train, validation for current fold
+            X_val_fold = X_folds[i]
+            X_train_fold = pd.concat([other_df for other_df in X_folds if not other_df.equals(X_val_fold)])
+
+            # Fit the model on the current fold training set
+            model = MFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1], combination_of_params[2], combination_of_params[3])
+
+            # Evaluate on the fold validation set
+            val_results.append(model.omer_rmse(X_val_fold))
+
+        return np.array(val_results).mean()
+
+    @staticmethod
+    def hyperparameters_tuning(df):
+        possible_k = [10, 100, 1000, 10000, 100000]
+        possible_alpha = [0.001, 0.01, 0.1, 0.2, 0.5]
+        possible_beta = [0.001, 0.01, 0.1, 0.2, 0.5]
+        possible_iterations = [10, 50, 200, 500, 2000]
+
+        list_of_lists = [possible_k,possible_alpha, possible_beta, possible_iterations]
+        all_combinations = list(product(*list_of_lists))
+
+        # shuffle the df
+        df = df.sample(frac=1)
+        mf_rmse_dict = dict()
+        for combination_of_params in all_combinations:
+            mf_rmse_dict[combination_of_params] = MFRecommender.cross_validation_error(df, combination_of_params, 5)
+
+        optimal_params = min(mf_rmse_dict)
+        optimal_mf_rmse = mf_rmse_dict[optimal_params]
+        print(f'the optimal params for the mf recommender according to cross validation is : {optimal_params} and the optimal rmse is : {optimal_mf_rmse}')
+
+        return optimal_params
 
 class mf_params:
     def __init__(self, Q, P, b_u, b_m):
@@ -367,7 +408,5 @@ class mf_params:
         self.P = np.copy(P)
         self.b_u = np.copy(b_u)
         self.b_m = np.copy(b_m)
-
-
 
 

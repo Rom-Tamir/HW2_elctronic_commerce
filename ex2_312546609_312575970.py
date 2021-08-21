@@ -6,7 +6,8 @@ import numpy as np
 
 
 class Recommender(abc.ABC):
-    def __init__(self, ratings: pd.DataFrame):
+    def __init__(self, ratings: pd.DataFrame, num_neighbors=0):
+        self.num_neighbors = num_neighbors
         self.r_matrix_avg = sum(ratings['rating']) / len(ratings['rating'])
         self.r_matrix = None
         self.b_i_dict = dict()
@@ -61,7 +62,7 @@ class Recommender(abc.ABC):
 
         return rmse
 
-
+ #region BaselineRecommender
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
         for user_idx in ratings['user'].unique():
@@ -87,6 +88,7 @@ class BaselineRecommender(Recommender):
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
+#endregion
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
@@ -141,15 +143,18 @@ class NeighborhoodRecommender(Recommender):
         for other_user in potential_users:
             potential_users_similarities.append((self.similarity_dict[(user, other_user)], other_user))
         potential_users_similarities.sort(key=lambda x: abs(x[0]), reverse=True)
-        top_3_lst = potential_users_similarities[:3]
+        top_k_lst = potential_users_similarities[:self.num_neighbors]
         numerator = 0
         denominator = 0
-        for similarity, user_idx in top_3_lst:
+        for similarity, user_idx in top_k_lst:
             r_wave_other_user = self.r_wave_matrix[int(user_idx)][int(item)]
             numerator += r_wave_other_user * similarity
             denominator += abs(similarity)
 
         corr_val = numerator / denominator if denominator != 0 else 0
+
+        self.b_u_dict[user] = self.b_u_dict[user] if user in self.b_u_dict else 0
+        self.b_i_dict[item] = self.b_i_dict[item] if item in self.b_i_dict else 0
 
         predicted_rating = self.r_matrix_avg + self.b_u_dict[user] + self.b_i_dict[item] + corr_val
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
@@ -161,6 +166,25 @@ class NeighborhoodRecommender(Recommender):
         :return: The correlation of the two users (between -1 and 1)
         """
         return self.similarity_dict[(user1, user2)] if (user1, user2) in self.similarity_dict else 0
+
+    @staticmethod
+    def cross_validation_error(df, num_of_neighbors, folds):
+        # Create folds
+        X_folds = np.array_split(df, folds)
+        train_results, val_results = [], []
+
+        for i in range(folds):
+            # Create train, validation for current fold
+            X_val_fold = X_folds[i]
+            X_train_fold = pd.concat([other_df for other_df in X_folds if not other_df.equals(X_val_fold)])
+
+            # Fit the model on the current fold training set
+            model = NeighborhoodRecommender(X_train_fold, num_of_neighbors)
+
+            # Evaluate on the fold validation set
+            val_results.append(model.omer_rmse(X_val_fold))
+
+        return np.array(val_results).mean()
 
 
 class LSRecommender(Recommender):
@@ -223,7 +247,6 @@ class CompetitionRecommender(Recommender):
         b_i = self.b_i_dict[item] if item in self.b_i_dict else 0
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
-
 
 
 class MFRecommender(Recommender):

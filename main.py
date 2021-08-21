@@ -47,26 +47,30 @@ def train_test_split(ratings, train_ratio=0.8):
 def main():
     ratings = transform(pd.read_csv('ratings.csv'))
     train, test = train_test_split(ratings)
-    start = time.time()
 
-    """baseline_recommender = ex2_312546609_312575970.BaselineRecommender(train)
-    print(baseline_recommender.rmse(test))
-    neighborhood_recommender = ex2_312546609_312575970.NeighborhoodRecommender(train)
+    """ start = time.time()
+    # shuffle the df
+    train = train.sample(frac=1)
+    neighbors_rmse_dict = dict()
+    for k in range(1, 20):
+        neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train, k, 5)
+    optimal_k = min(neighbors_rmse_dict)
+    optimal_neighbors_rmse = neighbors_rmse_dict[optimal_k]
+    print(f'the optimal number of neighbors according to cross validation is : {optimal_k} and the optimal rmse is : {optimal_neighbors_rmse}')
+    neighborhood_recommender = ex2_312546609_312575970.NeighborhoodRecommender(train, optimal_k)
     print(neighborhood_recommender.rmse(test))
-    print(f'Took {time.time() - start:.2f}s')
-    start = time.time()
+    print(f'Took {time.time() - start:.2f}s')"""
+
+    """start = time.time()
     ls_recommender = ex2_312546609_312575970.LSRecommender(train)
     ls_recommender.solve_ls()
     print(ls_recommender.rmse(test))
     print(f'Took {time.time() - start:.2f}s')"""
-    start = time.time()
-    """ratings_comp = transform(pd.read_csv('ratings_comp.csv'))
-    train, test = train_test_split(ratings_comp)
-    comp_recommender = ex2_312546609_312575970.CompetitionRecommender(train)
-    print(comp_recommender.rmse(test))"""
+
+    """start = time.time()
     mf_recommender = ex2_312546609_312575970.MFRecommender(train)
     print(mf_recommender.omer_rmse(test))
-    print(f'Took {time.time() - start:.2f}s')
+    print(f'Took {time.time() - start:.2f}s')"""
 
 
 if __name__ == '__main__':

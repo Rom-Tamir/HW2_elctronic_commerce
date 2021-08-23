@@ -52,9 +52,11 @@ def main():
     # cross validation
     train = train.sample(frac=1)
     neighbors_rmse_dict = dict()
-    for k in range(1, 15):
+    print('neighbors_rmse_dict = {')
+    for k in range(1, 150, 2):
         neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train, k, 5)
-        print(f'With {k} neighbors, the RMSE is: {neighbors_rmse_dict[k]}')
+        print(f'{k}: {neighbors_rmse_dict[k]}')
+    print('}')
     optimal_k = min(neighbors_rmse_dict)
     optimal_neighbors_rmse = neighbors_rmse_dict[optimal_k]
     print(f'The optimal number of neighbors according to cross validation is: {optimal_k} and the optimal RMSE is: {optimal_neighbors_rmse}')
@@ -62,7 +64,7 @@ def main():
     # RMSE of test
     neighborhood_recommender = ex2_312546609_312575970.NeighborhoodRecommender(train, optimal_k)
     print(f'The Neighborhood Recommender model RMSE on test set, with the optimal k is: {neighborhood_recommender.omer_rmse(test)}')
-    print(f'Took {time.time() - start:.2f}s')
+    print(f'Took {(time.time() - start)/60:.2f} minutes')
     print()
     print("-----------------------------------------------------------------")
     print()
@@ -73,7 +75,7 @@ def main():
     ls_recommender = ex2_312546609_312575970.LSRecommender(train)
     ls_recommender.solve_ls()
     print(f'The Least Squares Recommender model RMSE is: {ls_recommender.omer_rmse(test)}')
-    print(f'Took {time.time() - start:.2f}s')
+    print(f'Took {(time.time() - start)/60:.2f} minutes')
     print()
     print("-----------------------------------------------------------------")
     print()
@@ -84,7 +86,7 @@ def main():
     optimal_params = ex2_312546609_312575970.MFRecommender.hyperparameters_tuning(train)
     mf_recommender = ex2_312546609_312575970.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
     print(f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {mf_recommender.omer_rmse(test)}')
-    print(f'Took {time.time() - start:.2f}s')
+    print(f'Took {(time.time() - start)/60:.2f} minutes')
 
 
 if __name__ == '__main__':

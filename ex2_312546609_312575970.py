@@ -378,10 +378,10 @@ class MFRecommender(Recommender):
 
     @staticmethod
     def hyperparameters_tuning(df):
-        possible_k = [10, 100, 1000, 10000, 100000]
-        possible_alpha = [0.001, 0.01, 0.1, 0.2, 0.5]
-        possible_beta = [0.0001, 0.01, 1, 100, 10000]
-        possible_iterations = [10, 50, 200, 500, 2000]
+        possible_k = [10, 100, 1000]
+        possible_alpha = [0.001, 0.01, 0.1]
+        possible_beta = [0.001, 0.01, 0.1]
+        possible_iterations = [10, 100, 500]
 
         list_of_lists = [possible_k, possible_alpha, possible_beta, possible_iterations]
         all_combinations = list(product(*list_of_lists))

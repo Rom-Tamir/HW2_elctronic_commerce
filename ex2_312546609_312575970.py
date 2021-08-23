@@ -63,7 +63,7 @@ class Recommender(abc.ABC):
 
         return rmse
 
- #region BaselineRecommender
+
 class BaselineRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
         for user_idx in ratings['user'].unique():
@@ -89,7 +89,6 @@ class BaselineRecommender(Recommender):
         predicted_rating = self.r_matrix_avg + b_u + b_i
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
-#endregion
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
@@ -268,7 +267,6 @@ class MFRecommender(Recommender):
         self.count = 0
         super().__init__(R)
 
-
     def initialize_predictor(self, ratings):
         n_users = int(max(ratings['user']) + 1)
         n_items = int(max(ratings['item']) + 1)
@@ -284,8 +282,6 @@ class MFRecommender(Recommender):
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
             avg_item = sum(r_item) / len(r_item)
             self.b_m[int(item_idx)] = avg_item - self.r_matrix_avg
-
-
 
         self.r_matrix = np.zeros((n_users, n_items))
         for idx, row in ratings.iterrows():
@@ -384,10 +380,10 @@ class MFRecommender(Recommender):
     def hyperparameters_tuning(df):
         possible_k = [10, 100, 1000, 10000, 100000]
         possible_alpha = [0.001, 0.01, 0.1, 0.2, 0.5]
-        possible_beta = [0.001, 0.01, 0.1, 0.2, 0.5]
+        possible_beta = [0.0001, 0.01, 1, 100, 10000]
         possible_iterations = [10, 50, 200, 500, 2000]
 
-        list_of_lists = [possible_k,possible_alpha, possible_beta, possible_iterations]
+        list_of_lists = [possible_k, possible_alpha, possible_beta, possible_iterations]
         all_combinations = list(product(*list_of_lists))
 
         # shuffle the df
@@ -398,9 +394,10 @@ class MFRecommender(Recommender):
 
         optimal_params = min(mf_rmse_dict)
         optimal_mf_rmse = mf_rmse_dict[optimal_params]
-        print(f'the optimal params for the mf recommender according to cross validation is : {optimal_params} and the optimal rmse is : {optimal_mf_rmse}')
+        print(f'The optimal params for the MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
 
         return optimal_params
+
 
 class mf_params:
     def __init__(self, Q, P, b_u, b_m):

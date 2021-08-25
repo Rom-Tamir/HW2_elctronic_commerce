@@ -50,11 +50,11 @@ def main():
 
     start = time.time()
     # cross validation
-    train = train.sample(frac=1)
+    train_sample = train.sample(frac=1)
     neighbors_rmse_dict = dict()
     print('neighbors_rmse_dict = {')
     for k in range(1, 150, 2):
-        neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train, k, 5)
+        neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train_sample, k, 5)
         print(f'{k}: {neighbors_rmse_dict[k]}')
     print('}')
     optimal_k = min(neighbors_rmse_dict)
@@ -83,8 +83,9 @@ def main():
 ####################################################################################
 
     start = time.time()
-    optimal_params = ex2_312546609_312575970.MFRecommender.hyperparameters_tuning(train)
-    mf_recommender = ex2_312546609_312575970.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
+    #optimal_params = ex2_312546609_312575970.MFRecommender.hyperparameters_tuning(train)
+    #mf_recommender = ex2_312546609_312575970.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
+    mf_recommender = ex2_312546609_312575970.MFRecommender(train, 250, 0.1, 0.1, 100)
     print(f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {mf_recommender.omer_rmse(test)}')
     print(f'Took {(time.time() - start)/60:.2f} minutes')
 

@@ -361,7 +361,7 @@ class MFRecommender(Recommender):
     def cross_validation_error(df, combination_of_params, folds):
         # Create folds
         X_folds = np.array_split(df, folds)
-        train_results, val_results = [], []
+        val_results = []
 
         for i in range(folds):
             # Create train, validation for current fold
@@ -378,10 +378,10 @@ class MFRecommender(Recommender):
 
     @staticmethod
     def hyperparameters_tuning(df):
-        possible_k = [10, 100, 1000]
-        possible_alpha = [0.001, 0.01, 0.1]
-        possible_beta = [0.001, 0.01, 0.1]
-        possible_iterations = [10, 100, 500]
+        possible_k = [10, 100, 250]
+        possible_alpha = [0.01, 0.1]
+        possible_beta = [0.01, 0.1]
+        possible_iterations = [10, 50, 100]
 
         list_of_lists = [possible_k, possible_alpha, possible_beta, possible_iterations]
         all_combinations = list(product(*list_of_lists))
@@ -390,10 +390,12 @@ class MFRecommender(Recommender):
         df = df.sample(frac=1)
         mf_rmse_dict = dict()
         for combination_of_params in all_combinations:
-            mf_rmse_dict[combination_of_params] = MFRecommender.cross_validation_error(df, combination_of_params, 5)
+            mf_rmse_dict[combination_of_params] = MFRecommender.cross_validation_error(df, combination_of_params, 4)
 
-        optimal_params = min(mf_rmse_dict)
-        optimal_mf_rmse = mf_rmse_dict[optimal_params]
+        keys_list = list(mf_rmse_dict.keys())
+        val_list = list(mf_rmse_dict.values())
+        optimal_mf_rmse = min(val_list)
+        optimal_params = keys_list[val_list.index(optimal_mf_rmse)]
         print(f'The optimal params for the MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
 
         return optimal_params

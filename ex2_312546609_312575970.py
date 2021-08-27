@@ -4,6 +4,7 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 from itertools import product
+import ast
 
 
 class Recommender(abc.ABC):
@@ -266,6 +267,7 @@ class MFRecommender(Recommender):
         self.iterations = iterations
         self.count = 0
         super().__init__(R)
+        self.b_company = dict()
 
     def initialize_predictor(self, ratings):
         n_users = int(max(ratings['user']) + 1)
@@ -399,6 +401,183 @@ class MFRecommender(Recommender):
         print(f'The optimal params for the MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
 
         return optimal_params
+
+class HybridMFRecommender(Recommender):
+    def __init__(self, R, K=100, alpha=0.01, beta=0.01, iterations=10, movies_metadata=None):
+        """
+               Perform matrix factorization to predict empty
+               entries in a matrix.
+               Arguments
+               - R (ndarray)   : user-item rating matrix
+               - K (int)       : number of latent dimensions
+               - alpha (float) : learning rate
+               - beta (float)  : regularization parameter
+               """
+        # region hyper-parameters
+        self.K = K
+        self.alpha = alpha
+        self.beta = beta
+        self.iterations = iterations
+        # endregion
+
+        # region movies metadata biases
+        self.b_company = None
+        self.movies_metadata = movies_metadata
+        # endregion
+
+        # region other fields
+        self.count = 0
+        self.ratings = R
+        self.r_matrix_avg = sum(R['rating']) / len(R['rating'])
+        # endregion
+
+        super().__init__(R)
+
+    def initialize_predictor(self, ratings):
+        n_users = int(max(ratings['user']) + 1)
+        n_items = int(max(ratings['item']) + 1)
+
+        # region build b_u, b_m, r_matrix and metadata biases
+        self.b_u = np.zeros(n_users)
+        self.b_m = np.zeros(n_items)
+        for user_idx in ratings['user'].unique():
+            r_user = list(ratings[ratings['user'] == user_idx]['rating'])
+            avg_user = sum(r_user) / len(r_user)
+            self.b_u[int(user_idx)] = avg_user - self.r_matrix_avg
+
+        for item_idx in ratings['item'].unique():
+            r_item = list(ratings[ratings['item'] == item_idx]['rating'])
+            avg_item = sum(r_item) / len(r_item)
+            self.b_m[int(item_idx)] = avg_item - self.r_matrix_avg
+
+        self.r_matrix = np.zeros((n_users, n_items))
+        for idx, row in ratings.iterrows():
+            curr_user = int(row['user'])
+            curr_item = int(row['item'])
+            self.r_matrix[curr_user][curr_item] = float(row['rating'])
+
+        self.b_company = np.zeros(n_items)
+        self.build_biases()
+        # endregion
+
+        # region Init P, Q, samples and train by SGD
+        self.P = np.random.normal(scale=1. / self.K, size=(n_users, self.K))
+        self.Q = np.random.normal(scale=1. / self.K, size=(n_items, self.K))
+
+        self.samples = [
+            (i, j, self.r_matrix[i, j])
+            for i in range(n_users)
+            for j in range(n_items)
+            if self.r_matrix[i, j] > 0
+        ]
+
+        training_process = []
+        for i in range(self.iterations):
+            np.random.shuffle(self.samples)
+            self.sgd()
+            rmse = self.omer_rmse(ratings)
+            training_process.append((i, rmse, mf_params(self.Q, self.P, self.b_u, self.b_m)))
+
+        # endregion
+
+        return training_process
+
+    def sgd(self):
+        """
+        Perform stochastic graident descent
+        """
+        for user, item, rating in self.samples:
+            prediction = self.predict(user, item, 0)
+            error = rating - prediction
+            # region update biases
+            self.b_u[user] += self.alpha * (error - self.beta * self.b_u[user])
+            self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
+            self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
+            # endregion
+            # region update P,Q
+            self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
+            self.Q[item, :] += self.alpha * (error * self.P[user, :] - self.beta * self.Q[item, :])
+            # endregion
+
+    def predict(self, user: int, item: int, original_item=0) -> float:
+        """
+        :param original_item:
+        :param user: User identifier
+        :param item: Item identifier
+        :return: Predicted rating of the user for the item
+        """
+        total_b_companies = self.b_company[item] if item in self.b_company else 0
+
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + total_b_companies + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
+
+    def mf_rmse(self):
+        """
+        A function to compute the total mean square error
+        """
+        xs, ys = self.r_matrix.nonzero()
+        predicted_matrix = self.full_matrix()
+        error = 0
+        for x, y in zip(xs, ys):
+            error += (self.r_matrix[x, y] - predicted_matrix[x, y]) ** 2
+        return error ** 0.5
+
+    def full_matrix(self):
+        """
+        Computer the full matrix using the resultant biases, P and Q
+        """
+        return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
+
+    def build_biases(self):
+        self.build_companies_biases()
+
+    def build_companies_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build company_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        company_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            company_str = row["production_companies"]
+            company_dict = ast.literal_eval(company_str)
+            for item in company_dict:
+                company_rating_dict[item["name"]] = company_rating_dict.get(item["name"], 0) + movie_id_avg_rating_dict[
+                    movie_id]
+                counter_dict[item["name"]] = counter_dict.get(item["name"], 0) + 1
+        # endregion
+
+        # region build company_bias_dict
+        keys_list = list(company_rating_dict.keys())
+        company_bias_dict = {}
+        for company in keys_list:
+            company_bias_dict[company] = (company_rating_dict[company] / counter_dict[company]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_company dict (movie id as key)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            self.b_company[counter] = 0
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                continue
+            movie_company_str = movie_metadata["production_companies"].values[0]
+            movie_company_dict = ast.literal_eval(movie_company_str)
+            for company in movie_company_dict:
+                self.b_company[counter] += company_bias_dict[company["name"]] / len(movie_company_dict)
+
+            counter += 1
+
+        # endregion
 
 
 class mf_params:

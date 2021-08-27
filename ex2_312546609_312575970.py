@@ -421,8 +421,9 @@ class HybridMFRecommender(Recommender):
         # endregion
 
         # region movies metadata biases
-        self.b_company = None
         self.movies_metadata = movies_metadata
+        self.b_company = None
+        self.b_genre = None
         # endregion
 
         # region other fields
@@ -457,6 +458,7 @@ class HybridMFRecommender(Recommender):
             self.r_matrix[curr_user][curr_item] = float(row['rating'])
 
         self.b_company = np.zeros(n_items)
+        self.b_genre = np.zeros(n_items)
         self.build_biases()
         # endregion
 
@@ -493,6 +495,7 @@ class HybridMFRecommender(Recommender):
             self.b_u[user] += self.alpha * (error - self.beta * self.b_u[user])
             self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
             self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
+            self.b_genre[item] += self.alpha * (error - self.beta * self.b_genre[item])
             # endregion
             # region update P,Q
             self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
@@ -506,9 +509,10 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        total_b_companies = self.b_company[item] if item in self.b_company else 0
+        b_company = self.b_company[item] if item in self.b_company else 0
+        b_genre = self.b_genre[item] if item in self.b_genre else 0
 
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + total_b_companies + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + b_company + b_genre + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -530,6 +534,7 @@ class HybridMFRecommender(Recommender):
 
     def build_biases(self):
         self.build_companies_biases()
+        self.build_genres_biases()
 
     def build_companies_biases(self):
 
@@ -574,6 +579,54 @@ class HybridMFRecommender(Recommender):
             movie_company_dict = ast.literal_eval(movie_company_str)
             for company in movie_company_dict:
                 self.b_company[counter] += company_bias_dict[company["name"]] / len(movie_company_dict)
+
+            counter += 1
+
+        # endregion
+
+    def build_genres_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build genres_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        genres_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            genre_str = row["genres"]
+            genre_dict = ast.literal_eval(genre_str)
+            for genre in genre_dict:
+                genres_rating_dict[genre["name"]] = genres_rating_dict.get(genre["name"], 0) + movie_id_avg_rating_dict[
+                    movie_id]
+                counter_dict[genre["name"]] = counter_dict.get(genre["name"], 0) + 1
+        # endregion
+
+        # region build genres_bias_dict
+        keys_list = list(genres_rating_dict.keys())
+        genres_bias_dict = {}
+        for genre in keys_list:
+            genres_bias_dict[genre] = (genres_rating_dict[genre] / counter_dict[genre]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_genre dict (movie id as key)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            self.b_genre[counter] = 0
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                continue
+            movie_genre_str = movie_metadata["genres"].values[0]
+            movie_genre_dict = ast.literal_eval(movie_genre_str)
+            for genre in movie_genre_dict:
+                self.b_genre[counter] += genres_bias_dict[genre["name"]] / len(movie_genre_dict)
 
             counter += 1
 

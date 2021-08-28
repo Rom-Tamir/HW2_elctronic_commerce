@@ -68,9 +68,9 @@ def data_handling_for_hybrid(transformed_ratings):
 
 def main():
     ratings = transform(pd.read_csv('ratings.csv'))
-    # train, test = train_test_split(ratings)
+    train, test = train_test_split(ratings)
 
-    """start = time.time()
+    start = time.time()
     # cross validation
     train_sample = train.sample(frac=1)
     neighbors_rmse_dict = dict()
@@ -79,8 +79,11 @@ def main():
         neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train_sample, k, 5)
         print(f'{k}: {neighbors_rmse_dict[k]}')
     print('}')
-    optimal_k = min(neighbors_rmse_dict)
-    optimal_neighbors_rmse = neighbors_rmse_dict[optimal_k]
+
+    keys_list = list(neighbors_rmse_dict.keys())
+    val_list = list(neighbors_rmse_dict.values())
+    optimal_neighbors_rmse = min(val_list)
+    optimal_k = keys_list[val_list.index(optimal_neighbors_rmse)]
     print(f'The optimal number of neighbors according to cross validation is: {optimal_k} and the optimal RMSE is: {optimal_neighbors_rmse}')
 
     # RMSE of test

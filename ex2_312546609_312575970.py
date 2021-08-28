@@ -509,8 +509,8 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        b_company = self.b_company[item] if item in self.b_company else 0
-        b_genre = self.b_genre[item] if item in self.b_genre else 0
+        b_company = self.b_company[item]
+        b_genre = self.b_genre[item]
 
         predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + b_company + b_genre + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
@@ -535,6 +535,7 @@ class HybridMFRecommender(Recommender):
     def build_biases(self):
         self.build_companies_biases()
         self.build_genres_biases()
+        #return
 
     def build_companies_biases(self):
 
@@ -568,10 +569,9 @@ class HybridMFRecommender(Recommender):
             company_bias_dict[company] = (company_rating_dict[company] / counter_dict[company]) - self.r_matrix_avg
         # endregion
 
-        # region build b_company dict (movie id as key)
+        # region build b_company (movie id as index)
         counter = 0
         for movie_id in unique_original_movie_ids:
-            self.b_company[counter] = 0
             movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
             if len(movie_metadata) == 0:
                 continue
@@ -616,10 +616,9 @@ class HybridMFRecommender(Recommender):
             genres_bias_dict[genre] = (genres_rating_dict[genre] / counter_dict[genre]) - self.r_matrix_avg
         # endregion
 
-        # region build b_genre dict (movie id as key)
+        # region build b_genre (movie id as index)
         counter = 0
         for movie_id in unique_original_movie_ids:
-            self.b_genre[counter] = 0
             movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
             if len(movie_metadata) == 0:
                 continue

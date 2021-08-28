@@ -62,6 +62,7 @@ def data_handling_for_hybrid(transformed_ratings):
     movies_metadata['id'] = movies_metadata[movies_metadata['id'].map(lambda x: "/" not in x)]['id']
     movies_metadata['id'] = pd.to_numeric(movies_metadata['id'])
     movies_metadata['runtime'] = pd.to_numeric(movies_metadata['runtime'], errors='coerce')
+    movies_metadata['budget'] = pd.to_numeric(movies_metadata['budget'], errors='coerce')
     # endregion
 
     return transformed_ratings, movies_metadata

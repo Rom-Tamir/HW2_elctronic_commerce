@@ -416,6 +416,8 @@ class HybridMFRecommender(Recommender):
         self.b_country = None
         self.b_spoken = None
         self.b_runtime = None
+        self.b_revenue = None
+        self.b_budget = None
         # endregion
 
         # region other fields
@@ -454,6 +456,8 @@ class HybridMFRecommender(Recommender):
         self.b_country = np.zeros(n_items)
         self.b_spoken = np.zeros(n_items)
         self.b_runtime = np.zeros(n_items)
+        self.b_revenue = np.zeros(n_items)
+        self.b_budget = np.zeros(n_items)
         self.build_biases()
         # endregion
 
@@ -494,6 +498,9 @@ class HybridMFRecommender(Recommender):
             self.b_country[item] += self.alpha * (error - self.beta * self.b_country[item])
             self.b_spoken[item] += self.alpha * (error - self.beta * self.b_spoken[item])
             self.b_runtime[item] += self.alpha * (error - self.beta * self.b_runtime[item])
+            self.b_revenue[item] += self.alpha * (error - self.beta * self.b_revenue[item])
+            self.b_budget[item] += self.alpha * (error - self.beta * self.b_budget[item])
+
             # endregion
             # region update P,Q
             self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
@@ -507,7 +514,7 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.b_revenue[item] + self.b_budget[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -533,6 +540,8 @@ class HybridMFRecommender(Recommender):
         self.build_countries_biases()
         self.build_spoken_languages_biases()
         self.build_runtimes_biases()
+        self.build_revenues_biases()
+        self.build_budgets_biases()
         #return
 
     def build_companies_biases(self):
@@ -777,6 +786,110 @@ class HybridMFRecommender(Recommender):
             counter += 1
 
         # endregion
+
+    def build_revenues_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build revenues_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        revenues_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            revenue = row["revenue"]
+            if revenue == 0:
+                continue
+            elif revenue > 180000000:
+                revenues_rating_dict["high revenue"] = revenues_rating_dict.get("high revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["high revenue"] = counter_dict.get("high revenue", 0) + 1
+            elif revenue > 4000000:
+                revenues_rating_dict["medium revenue"] = revenues_rating_dict.get("medium revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["medium revenue"] = counter_dict.get("medium revenue", 0) + 1
+            else:
+                revenues_rating_dict["low revenue"] = revenues_rating_dict.get("low revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["low revenue"] = counter_dict.get("low revenue", 0) + 1
+        # endregion
+
+        # region build revenues_biases_dict
+        keys_list = list(revenues_rating_dict.keys())
+        revenues_biases_dict = {}
+        for revenue in keys_list:
+            revenues_biases_dict[revenue] = (revenues_rating_dict[revenue] / counter_dict[revenue]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_runtime (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_revenue = movie_metadata["revenue"].values[0]
+            self.b_revenue[counter] = revenues_biases_dict['high revenue'] if movie_revenue > 180000000 else revenues_biases_dict['medium revenue'] if movie_revenue > 4000000 else revenues_biases_dict['low revenue']
+            counter += 1
+
+        # endregion
+
+    def build_budgets_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build budgets_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        budgets_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            budget = row["budget"]
+            if budget == 0:
+                continue
+            elif budget > 54000000:
+                budgets_rating_dict["high budget"] = budgets_rating_dict.get("high budget", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["high budget"] = counter_dict.get("high budget", 0) + 1
+            elif budget > 2000000:
+                budgets_rating_dict["medium budget"] = budgets_rating_dict.get("medium budget", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["medium budget"] = counter_dict.get("medium budget", 0) + 1
+            else:
+                budgets_rating_dict["low budget"] = budgets_rating_dict.get("low budget", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["low budget"] = counter_dict.get("low budget", 0) + 1
+        # endregion
+
+        # region build budgets_biases_dict
+        keys_list = list(budgets_rating_dict.keys())
+        budgets_biases_dict = {}
+        for budget in keys_list:
+            budgets_biases_dict[budget] = (budgets_rating_dict[budget] / counter_dict[budget]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_runtime (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_budget = movie_metadata["budget"].values[0]
+            self.b_revenue[counter] = budgets_biases_dict['high budget'] if movie_budget > 54000000 else budgets_biases_dict['medium budget'] if movie_budget > 2000000 else budgets_biases_dict['low budget']
+            counter += 1
+
+        # endregion
+
+
 
 
 class mf_params:

@@ -36,18 +36,6 @@ class Recommender(abc.ABC):
         raise NotImplementedError()
 
     def rmse(self, true_ratings) -> float:
-        """
-        :param true_ratings: DataFrame of the real ratings
-        :return: RMSE score
-        """
-        sum_diff_2 = 0
-        for idx, row in true_ratings.iterrows():
-            sum_diff_2 += (row['rating'] - self.predict(row['user'], row['item'], row['timestamp']))**2
-
-        r_size = 1 / len(true_ratings['user'])
-        return (r_size * sum_diff_2)**0.5
-
-    def omer_rmse(self, true_ratings) -> float:
         user_col = true_ratings["user"].tolist()
         item_col = true_ratings["item"].tolist()
         rating_col = true_ratings["rating"].tolist()
@@ -183,7 +171,7 @@ class NeighborhoodRecommender(Recommender):
             model = NeighborhoodRecommender(X_train_fold, num_of_neighbors)
 
             # Evaluate on the fold validation set
-            val_results.append(model.omer_rmse(X_val_fold))
+            val_results.append(model.rmse(X_val_fold))
 
         return np.array(val_results).mean()
 
@@ -306,7 +294,7 @@ class MFRecommender(Recommender):
         for i in range(self.iterations):
             np.random.shuffle(self.samples)
             self.sgd()
-            rmse = self.omer_rmse(ratings)
+            rmse = self.rmse(ratings)
             training_process.append((i, rmse, mf_params(self.Q, self.P, self.b_u, self.b_m)))
             # if (i+1) % 100 == 0:
             #    print("Iteration: %d ; error = %.4f" % (i+1, mse))
@@ -374,7 +362,7 @@ class MFRecommender(Recommender):
             model = MFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1], combination_of_params[2], combination_of_params[3])
 
             # Evaluate on the fold validation set
-            val_results.append(model.omer_rmse(X_val_fold))
+            val_results.append(model.rmse(X_val_fold))
 
         return np.array(val_results).mean()
 
@@ -402,6 +390,7 @@ class MFRecommender(Recommender):
 
         return optimal_params
 
+
 class HybridMFRecommender(Recommender):
     def __init__(self, R, K=100, alpha=0.01, beta=0.01, iterations=10, movies_metadata=None):
         """
@@ -424,6 +413,8 @@ class HybridMFRecommender(Recommender):
         self.movies_metadata = movies_metadata
         self.b_company = None
         self.b_genre = None
+        self.b_country = None
+        self.b_spoken = None
         # endregion
 
         # region other fields
@@ -459,6 +450,8 @@ class HybridMFRecommender(Recommender):
 
         self.b_company = np.zeros(n_items)
         self.b_genre = np.zeros(n_items)
+        self.b_country = np.zeros(n_items)
+        self.b_spoken = np.zeros(n_items)
         self.build_biases()
         # endregion
 
@@ -477,7 +470,7 @@ class HybridMFRecommender(Recommender):
         for i in range(self.iterations):
             np.random.shuffle(self.samples)
             self.sgd()
-            rmse = self.omer_rmse(ratings)
+            rmse = self.rmse(ratings)
             training_process.append((i, rmse, mf_params(self.Q, self.P, self.b_u, self.b_m)))
 
         # endregion
@@ -496,6 +489,8 @@ class HybridMFRecommender(Recommender):
             self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
             self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
             self.b_genre[item] += self.alpha * (error - self.beta * self.b_genre[item])
+            self.b_country[item] += self.alpha * (error - self.beta * self.b_country[item])
+            self.b_spoken[item] += self.alpha * (error - self.beta * self.b_spoken[item])
             # endregion
             # region update P,Q
             self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
@@ -509,10 +504,7 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        b_company = self.b_company[item]
-        b_genre = self.b_genre[item]
-
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + b_company + b_genre + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -535,6 +527,8 @@ class HybridMFRecommender(Recommender):
     def build_biases(self):
         self.build_companies_biases()
         self.build_genres_biases()
+        self.build_countries_biases()
+        self.build_spoken_languages_biases()
         #return
 
     def build_companies_biases(self):
@@ -626,6 +620,100 @@ class HybridMFRecommender(Recommender):
             movie_genre_dict = ast.literal_eval(movie_genre_str)
             for genre in movie_genre_dict:
                 self.b_genre[counter] += genres_bias_dict[genre["name"]] / len(movie_genre_dict)
+
+            counter += 1
+
+        # endregion
+
+    def build_countries_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build countries_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        countries_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            country_str = row["production_countries"]
+            country_dict = ast.literal_eval(country_str)
+            for country in country_dict:
+                countries_rating_dict[country["name"]] = countries_rating_dict.get(country["name"], 0) + movie_id_avg_rating_dict[
+                    movie_id]
+                counter_dict[country["name"]] = counter_dict.get(country["name"], 0) + 1
+        # endregion
+
+        # region build countries_bias_dict
+        keys_list = list(countries_rating_dict.keys())
+        countries_bias_dict = {}
+        for country in keys_list:
+            countries_bias_dict[country] = (countries_rating_dict[country] / counter_dict[country]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_genre (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                continue
+            movie_country_str = movie_metadata["production_countries"].values[0]
+            movie_country_dict = ast.literal_eval(movie_country_str)
+            for country in movie_country_dict:
+                self.b_country[counter] += countries_bias_dict[country["name"]] / len(movie_country_dict)
+
+            counter += 1
+
+        # endregion
+
+    def build_spoken_languages_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build languages_rating_dict & languages_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        languages_dict = {}
+        languages_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            language_str = row["spoken_languages"]
+            language_dict = ast.literal_eval(language_str)
+            for language in language_dict:
+                languages_rating_dict[language["name"]] = languages_rating_dict.get(language["name"], 0) + movie_id_avg_rating_dict[
+                    movie_id]
+                languages_dict[language["name"]] = languages_dict.get(language["name"], 0) + 1
+        # endregion
+
+        # region build languages_bias_dict
+        keys_list = list(languages_rating_dict.keys())
+        languages_bias_dict = {}
+        for language in keys_list:
+            languages_bias_dict[language] = (languages_rating_dict[language] / languages_dict[language]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_genre (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                continue
+            movie_language_str = movie_metadata["spoken_languages"].values[0]
+            movie_language_dict = ast.literal_eval(movie_language_str)
+            for language in movie_language_dict:
+                self.b_spoken[counter] += languages_bias_dict[language["name"]] / len(movie_language_dict)
 
             counter += 1
 

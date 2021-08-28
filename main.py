@@ -58,7 +58,7 @@ def data_handling_for_hybrid(transformed_ratings):
     movies_metadata = pd.read_csv('movies_metadata.csv')
     movies_metadata = movies_metadata.drop(
         columns=['adult', 'belongs_to_collection', 'homepage', 'imdb_id', 'original_title', 'overview', 'poster_path',
-                 'spoken_languages', 'status', 'tagline', 'title', 'video'])
+                 'status', 'tagline', 'title', 'video'])
     movies_metadata['id'] = movies_metadata[movies_metadata['id'].map(lambda x: "/" not in x)]['id']
     movies_metadata['id'] = pd.to_numeric(movies_metadata['id'])
     # endregion
@@ -68,9 +68,9 @@ def data_handling_for_hybrid(transformed_ratings):
 
 def main():
     ratings = transform(pd.read_csv('ratings.csv'))
-    train, test = train_test_split(ratings)
+    #train, test = train_test_split(ratings)
 
-    start = time.time()
+    """start = time.time()
     # cross validation
     train_sample = train.sample(frac=1)
     neighbors_rmse_dict = dict()
@@ -132,10 +132,10 @@ def main():
     hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 100, 0.01, 0.1, 10, movies_metadata)
 
     print(
-        f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.omer_rmse(test)}')
+        f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')
     print(f'Took {(time.time() - start) / 60:.2f} minutes')
 
 
 if __name__ == '__main__':
-    np.random.seed(100)
+    np.random.seed(0)
     main()

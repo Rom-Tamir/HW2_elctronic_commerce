@@ -418,6 +418,10 @@ class HybridMFRecommender(Recommender):
         self.b_runtime = None
         self.b_revenue = None
         self.b_budget = None
+        self.b_popularity = None
+        self.b_vote_count = None
+        self.b_vote_avg = None
+        self.b_years = None
         # endregion
 
         # region other fields
@@ -458,6 +462,11 @@ class HybridMFRecommender(Recommender):
         self.b_runtime = np.zeros(n_items)
         self.b_revenue = np.zeros(n_items)
         self.b_budget = np.zeros(n_items)
+        self.b_popularity = np.zeros(n_items)
+        self.b_vote_count = np.zeros(n_items)
+        self.b_vote_avg = np.zeros(n_items)
+        self.b_years = np.zeros(n_items)
+
         self.build_biases()
         # endregion
 
@@ -500,6 +509,10 @@ class HybridMFRecommender(Recommender):
             self.b_runtime[item] += self.alpha * (error - self.beta * self.b_runtime[item])
             self.b_revenue[item] += self.alpha * (error - self.beta * self.b_revenue[item])
             self.b_budget[item] += self.alpha * (error - self.beta * self.b_budget[item])
+            self.b_popularity[item] += self.alpha * (error - self.beta * self.b_popularity[item])
+            self.b_vote_count[item] += self.alpha * (error - self.beta * self.b_vote_count[item])
+            self.b_vote_avg[item] += self.alpha * (error - self.beta * self.b_vote_avg[item])
+            self.b_years[item] += self.alpha * (error - self.beta * self.b_years[item])
 
             # endregion
             # region update P,Q
@@ -514,7 +527,7 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.b_revenue[item] + self.b_budget[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.b_revenue[item] + self.b_budget[item] + self.b_popularity[item] + self.b_vote_count[item] + self.b_vote_avg[item] + self.b_years[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -542,6 +555,10 @@ class HybridMFRecommender(Recommender):
         self.build_runtimes_biases()
         self.build_revenues_biases()
         self.build_budgets_biases()
+        self.build_popularity_biases()
+        self.build_vote_counts_biases()
+        self.build_vote_avg_biases()
+        self.build_years_biases()
         #return
 
     def build_companies_biases(self):
@@ -672,7 +689,7 @@ class HybridMFRecommender(Recommender):
             countries_bias_dict[country] = (countries_rating_dict[country] / counter_dict[country]) - self.r_matrix_avg
         # endregion
 
-        # region build b_genre (movie id as index)
+        # region build b_country (movie id as index)
         counter = 0
         for movie_id in unique_original_movie_ids:
             movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
@@ -825,7 +842,7 @@ class HybridMFRecommender(Recommender):
             revenues_biases_dict[revenue] = (revenues_rating_dict[revenue] / counter_dict[revenue]) - self.r_matrix_avg
         # endregion
 
-        # region build b_runtime (movie id as index)
+        # region build b_revenue (movie id as index)
         counter = 0
         for movie_id in unique_original_movie_ids:
             movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
@@ -876,7 +893,7 @@ class HybridMFRecommender(Recommender):
             budgets_biases_dict[budget] = (budgets_rating_dict[budget] / counter_dict[budget]) - self.r_matrix_avg
         # endregion
 
-        # region build b_runtime (movie id as index)
+        # region build b_budget (movie id as index)
         counter = 0
         for movie_id in unique_original_movie_ids:
             movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
@@ -884,11 +901,261 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_budget = movie_metadata["budget"].values[0]
-            self.b_revenue[counter] = budgets_biases_dict['high budget'] if movie_budget > 54000000 else budgets_biases_dict['medium budget'] if movie_budget > 2000000 else budgets_biases_dict['low budget']
+            self.b_budget[counter] = budgets_biases_dict['high budget'] if movie_budget > 54000000 else budgets_biases_dict['medium budget'] if movie_budget > 2000000 else budgets_biases_dict['low budget']
             counter += 1
 
         # endregion
 
+    def build_popularity_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build popularity_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        popularity_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            popularity = row["popularity"]
+            if popularity == 0:
+                continue
+            elif popularity > 15:
+                popularity_rating_dict["very high popularity"] = popularity_rating_dict.get("very high popularity", 0) + \
+                                                             movie_id_avg_rating_dict[movie_id]
+                counter_dict["very high popularity"] = counter_dict.get("very high popularity", 0) + 1
+            elif popularity > 10:
+                popularity_rating_dict["high popularity"] = popularity_rating_dict.get("high popularity", 0) + \
+                                                            movie_id_avg_rating_dict[movie_id]
+                counter_dict["high popularity"] = counter_dict.get("high popularity", 0) + 1
+            elif popularity > 5:
+                popularity_rating_dict["medium popularity"] = popularity_rating_dict.get("medium popularity", 0) + \
+                                                              movie_id_avg_rating_dict[movie_id]
+                counter_dict["medium popularity"] = counter_dict.get("medium popularity", 0) + 1
+            elif popularity > 1:
+                popularity_rating_dict["low popularity"] = popularity_rating_dict.get("low popularity", 0) + \
+                                                           movie_id_avg_rating_dict[movie_id]
+                counter_dict["low popularity"] = counter_dict.get("low popularity", 0) + 1
+            else:
+                popularity_rating_dict["very low popularity"] = popularity_rating_dict.get("very low popularity", 0) + \
+                                                                movie_id_avg_rating_dict[movie_id]
+                counter_dict["very low popularity"] = counter_dict.get("very low popularity", 0) + 1
+        # endregion
+
+        # region build popularity_biases_dict
+        keys_list = list(popularity_rating_dict.keys())
+        popularity_biases_dict = {}
+        for popularity in keys_list:
+            popularity_biases_dict[popularity] = (popularity_rating_dict[popularity] / counter_dict[popularity]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_popularity (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_popularity = movie_metadata["popularity"].values[0]
+            self.b_popularity[counter] = popularity_biases_dict['very high popularity'] if movie_popularity > 15 else popularity_biases_dict['high popularity'] if movie_popularity > 10 else popularity_biases_dict['medium popularity'] if movie_popularity > 5 else popularity_biases_dict['low popularity'] if movie_popularity > 1 else popularity_biases_dict['very low popularity']
+            counter += 1
+
+        # endregion
+
+    def build_vote_counts_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build votes_count_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        votes_count_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            vote_count = row["vote_count"]
+            if vote_count == 0:
+                continue
+            elif vote_count > 550:
+                votes_count_rating_dict["high vote_count"] = votes_count_rating_dict.get("high vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["high vote_count"] = counter_dict.get("high vote_count", 0) + 1
+            elif vote_count > 5:
+                votes_count_rating_dict["medium vote_count"] = votes_count_rating_dict.get("medium vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["medium vote_count"] = counter_dict.get("medium vote_count", 0) + 1
+            else:
+                votes_count_rating_dict["low vote_count"] = votes_count_rating_dict.get("low vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["low vote_count"] = counter_dict.get("low vote_count", 0) + 1
+        # endregion
+
+        # region build votes_count_biases_dict
+        keys_list = list(votes_count_rating_dict.keys())
+        votes_count_biases_dict = {}
+        for vote_count in keys_list:
+            votes_count_biases_dict[vote_count] = (votes_count_rating_dict[vote_count] / counter_dict[vote_count]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_vote_count (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_vote_count = movie_metadata["vote_count"].values[0]
+            self.b_vote_count[counter] = votes_count_biases_dict['high vote_count'] if movie_vote_count > 550 else votes_count_biases_dict['medium vote_count'] if movie_vote_count > 5 else votes_count_biases_dict['low vote_count']
+            counter += 1
+
+        # endregion
+
+    def build_vote_avg_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build votes_avg_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        votes_avg_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            vote_average = row["vote_average"]
+            if vote_average == 0:
+                continue
+            elif vote_average > 7.5:
+                votes_avg_rating_dict["high vote_average"] = votes_avg_rating_dict.get("high vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["high vote_average"] = counter_dict.get("high vote_average", 0) + 1
+            elif vote_average > 5:
+                votes_avg_rating_dict["medium vote_average"] = votes_avg_rating_dict.get("medium vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["medium vote_average"] = counter_dict.get("medium vote_average", 0) + 1
+            else:
+                votes_avg_rating_dict["low vote_average"] = votes_avg_rating_dict.get("low vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["low vote_average"] = counter_dict.get("low vote_average", 0) + 1
+        # endregion
+
+        # region build votes_avg_biases_dict
+        keys_list = list(votes_avg_rating_dict.keys())
+        votes_avg_biases_dict = {}
+        for vote_average in keys_list:
+            votes_avg_biases_dict[vote_average] = (votes_avg_rating_dict[vote_average] / counter_dict[vote_average]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_vote_avg (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_vote_avg = movie_metadata["vote_average"].values[0]
+            self.b_vote_avg[counter] = votes_avg_biases_dict['high vote_average'] if movie_vote_avg > 7.5 else votes_avg_biases_dict['medium vote_average'] if movie_vote_avg > 5 else votes_avg_biases_dict['low vote_average']
+            counter += 1
+
+        # endregion
+
+    def build_years_biases(self):
+
+        # region calculate each movie avg
+        unique_original_movie_ids = self.ratings['original_movie_id'].unique()
+        movie_id_avg_rating_dict = {}
+        for movie_id in unique_original_movie_ids:
+            movie_id_avg_rating_dict[movie_id] = self.ratings[(self.ratings["original_movie_id"] == movie_id)][
+                "rating"].mean()
+
+        # endregion
+
+        # region build years_rating_dict & counter_dict
+        self.movies_metadata = self.movies_metadata[self.movies_metadata.id.isin(unique_original_movie_ids)]
+        counter_dict = {}
+        years_rating_dict = {}
+        for index, row in self.movies_metadata.iterrows():
+            movie_id = row["id"]
+            release_date = row["release_date"]
+
+            if type(release_date) is str and len(release_date) > 3 and release_date[-4:].isdigit() and 0 < int(release_date[-4:]) < 2022:
+                release_date = int(release_date[-4:])
+            else:
+                continue
+
+            if release_date >= 2010:
+                years_rating_dict["2010's"] = years_rating_dict.get("2010's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["2010's"] = counter_dict.get("2010's", 0) + 1
+            elif release_date >= 2000:
+                years_rating_dict["2000's"] = years_rating_dict.get("2000's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["2000's"] = counter_dict.get("2000's", 0) + 1
+            elif release_date >= 1990:
+                years_rating_dict["1990's"] = years_rating_dict.get("1990's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1990's"] = counter_dict.get("1990's", 0) + 1
+            elif release_date >= 1980:
+                years_rating_dict["1980's"] = years_rating_dict.get("1980's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1980's"] = counter_dict.get("1980's", 0) + 1
+            elif release_date >= 1970:
+                years_rating_dict["1970's"] = years_rating_dict.get("1970's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1970's"] = counter_dict.get("1970's", 0) + 1
+            elif release_date >= 1960:
+                years_rating_dict["1960's"] = years_rating_dict.get("1960's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1960's"] = counter_dict.get("1960's", 0) + 1
+            elif release_date >= 1950:
+                years_rating_dict["1950's"] = years_rating_dict.get("1950's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1950's"] = counter_dict.get("1950's", 0) + 1
+            elif release_date >= 1940:
+                years_rating_dict["1940's"] = years_rating_dict.get("1940's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1940's"] = counter_dict.get("1940's", 0) + 1
+            elif release_date >= 1930:
+                years_rating_dict["1930's"] = years_rating_dict.get("1930's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1930's"] = counter_dict.get("1930's", 0) + 1
+            elif release_date >= 1920:
+                years_rating_dict["1920's"] = years_rating_dict.get("1920's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1920's"] = counter_dict.get("1920's", 0) + 1
+            elif release_date >= 1910:
+                years_rating_dict["1910's"] = years_rating_dict.get("1910's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1910's"] = counter_dict.get("1910's", 0) + 1
+            else:
+                years_rating_dict["1900's"] = years_rating_dict.get("1900's", 0) + movie_id_avg_rating_dict[movie_id]
+                counter_dict["1900's"] = counter_dict.get("1900's", 0) + 1
+        # endregion
+
+        # region build years_biases_dict
+        keys_list = list(years_rating_dict.keys())
+        years_biases_dict = {}
+        for release_date in keys_list:
+            years_biases_dict[release_date] = (years_rating_dict[release_date] / counter_dict[release_date]) - self.r_matrix_avg
+        # endregion
+
+        # region build b_years (movie id as index)
+        counter = 0
+        for movie_id in unique_original_movie_ids:
+            movie_metadata = self.movies_metadata[self.movies_metadata.id == movie_id]
+            if len(movie_metadata) == 0:
+                counter += 1
+                continue
+            movie_year_raw = movie_metadata["release_date"].values[0]
+            if type(movie_year_raw) is str and len(movie_year_raw) > 3 and movie_year_raw[-4:].isdigit() and 0 < int(movie_year_raw[-4:]) < 2022:
+                movie_year = int(movie_year_raw[-4:])
+            else:
+                counter += 1
+                continue
+            self.b_years[counter] = years_biases_dict["2010's"] if movie_year > 2009 else years_biases_dict["2000's"] if movie_year > 1999 else years_biases_dict["1990's"] if movie_year > 1989 else years_biases_dict["1980's"] if movie_year > 1979 else years_biases_dict["1970's"] if movie_year > 1969 else years_biases_dict["1960's"] if movie_year > 1959 else years_biases_dict["1950's"] if movie_year > 1949 else years_biases_dict["1940's"] if movie_year > 1939 else years_biases_dict["1930's"] if movie_year > 1929 else years_biases_dict["1920's"] if movie_year > 1919 else years_biases_dict["1910's"] if movie_year > 1909 else years_biases_dict["1900's"]
+            counter += 1
+
+        # endregion
 
 
 

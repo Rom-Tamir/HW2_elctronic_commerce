@@ -12,8 +12,8 @@ def transform(ratings, min_items=5, min_users=5):
     :param min_users: Minimum users per item
     :return: Transformed DataFrame
     """
-    ratings = ratings.groupby('user').filter(lambda items: len(items) >= min_items)
-    ratings = ratings.groupby('item').filter(lambda users: len(users) >= min_users)
+    #ratings = ratings.groupby('user').filter(lambda items: len(items) >= min_items)
+    #ratings = ratings.groupby('item').filter(lambda users: len(users) >= min_users)
     unique_users = ratings['user'].unique()
     unique_items = ratings['item'].unique()
     user_mapping = {u: k for k, u in enumerate(unique_users)}
@@ -44,35 +44,38 @@ def train_test_split(ratings, train_ratio=0.8):
     return train, test
 
 
-def data_handling_for_hybrid(transformed_ratings):
+def data_handling_for_hybrid():
 
     # region transform handling
+    movies_metadata = pd.read_csv('movies_metadata.csv')
+    movies_metadata['id'] = movies_metadata[movies_metadata['id'].map(lambda x: "/" not in x)]['id']
+    movies_metadata['id'] = pd.to_numeric(movies_metadata['id'])
     original_ratings = pd.read_csv('ratings.csv')
+    unique_original_movie_ids = movies_metadata['id'].unique().tolist()
+    original_ratings = original_ratings[original_ratings.item.isin(unique_original_movie_ids)]
     original_ratings = original_ratings.groupby('user').filter(lambda items: len(items) >= 5)
     original_ratings = original_ratings.groupby('item').filter(lambda users: len(users) >= 5)
     original_movie_ids = original_ratings['item'].tolist()
-    transformed_ratings.insert(0, 'original_movie_id', original_movie_ids)
+    original_ratings = transform(original_ratings)
+    original_ratings.insert(0, 'original_movie_id', original_movie_ids)
+
+
     # endregion
 
     # region movies metadata handling
-    movies_metadata = pd.read_csv('movies_metadata.csv')
     movies_metadata = movies_metadata.drop(
         columns=['adult', 'belongs_to_collection', 'homepage', 'imdb_id', 'original_title', 'overview', 'poster_path',
                  'status', 'tagline', 'title', 'video'])
-    movies_metadata['id'] = movies_metadata[movies_metadata['id'].map(lambda x: "/" not in x)]['id']
-    movies_metadata['id'] = pd.to_numeric(movies_metadata['id'])
     movies_metadata['runtime'] = pd.to_numeric(movies_metadata['runtime'], errors='coerce')
     movies_metadata['budget'] = pd.to_numeric(movies_metadata['budget'], errors='coerce')
     movies_metadata['popularity'] = pd.to_numeric(movies_metadata['popularity'], errors='coerce')
     #movies_metadata['release_date'] = movies_metadata[movies_metadata['release_date'].map(lambda x: type(x) is str and len(x) > 3 and x[-4:].isdigit())]['release_date']
     # endregion
 
-    return transformed_ratings, movies_metadata
+    return original_ratings, movies_metadata
 
 
 def main():
-    ratings = transform(pd.read_csv('ratings.csv'))
-    #train, test = train_test_split(ratings)
 
     """start = time.time()
     # cross validation
@@ -131,9 +134,9 @@ def main():
     #####################################################################################
 
     start = time.time()
-    hybrid_data_transformed, movies_metadata = data_handling_for_hybrid(ratings)
+    hybrid_data_transformed, movies_metadata = data_handling_for_hybrid()
     train, test = train_test_split(hybrid_data_transformed)
-    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 100, 0.01, 0.1, 10, movies_metadata)
+    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 200, 0.01, 0.1, 100, movies_metadata)
 
     print(
         f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')

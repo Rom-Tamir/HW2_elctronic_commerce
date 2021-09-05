@@ -502,7 +502,7 @@ class HybridMFRecommender(Recommender):
             # region update biases
             self.b_u[user] += self.alpha * (error - self.beta * self.b_u[user])
             self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
-            self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
+            """self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
             self.b_genre[item] += self.alpha * (error - self.beta * self.b_genre[item])
             self.b_country[item] += self.alpha * (error - self.beta * self.b_country[item])
             self.b_spoken[item] += self.alpha * (error - self.beta * self.b_spoken[item])
@@ -513,7 +513,7 @@ class HybridMFRecommender(Recommender):
             self.b_vote_count[item] += self.alpha * (error - self.beta * self.b_vote_count[item])
             self.b_vote_avg[item] += self.alpha * (error - self.beta * self.b_vote_avg[item])
             self.b_years[item] += self.alpha * (error - self.beta * self.b_years[item])
-
+"""
             # endregion
             # region update P,Q
             self.P[user, :] += self.alpha * (error * self.Q[item, :] - self.beta * self.P[user, :])
@@ -548,7 +548,7 @@ class HybridMFRecommender(Recommender):
         return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
 
     def build_biases(self):
-        self.build_companies_biases()
+        """self.build_companies_biases()
         self.build_genres_biases()
         self.build_countries_biases()
         self.build_spoken_languages_biases()
@@ -558,8 +558,8 @@ class HybridMFRecommender(Recommender):
         self.build_popularity_biases()
         self.build_vote_counts_biases()
         self.build_vote_avg_biases()
-        self.build_years_biases()
-        #return
+        self.build_years_biases()"""
+        return
 
     def build_companies_biases(self):
 

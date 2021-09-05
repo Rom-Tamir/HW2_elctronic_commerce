@@ -546,7 +546,7 @@ class HybridMFRecommender(Recommender):
         Computer the full matrix using the resultant biases, P and Q
         """
         return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
-
+    #aaa
     def build_biases(self):
         self.build_companies_biases()
         self.build_genres_biases()

@@ -502,7 +502,7 @@ class HybridMFRecommender(Recommender):
             # region update biases
             self.b_u[user] += self.alpha * (error - self.beta * self.b_u[user])
             self.b_m[item] += self.alpha * (error - self.beta * self.b_m[item])
-            self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
+            """self.b_company[item] += self.alpha * (error - self.beta * self.b_company[item])
             self.b_genre[item] += self.alpha * (error - self.beta * self.b_genre[item])
             self.b_country[item] += self.alpha * (error - self.beta * self.b_country[item])
             self.b_spoken[item] += self.alpha * (error - self.beta * self.b_spoken[item])
@@ -512,7 +512,7 @@ class HybridMFRecommender(Recommender):
             self.b_popularity[item] += self.alpha * (error - self.beta * self.b_popularity[item])
             self.b_vote_count[item] += self.alpha * (error - self.beta * self.b_vote_count[item])
             self.b_vote_avg[item] += self.alpha * (error - self.beta * self.b_vote_avg[item])
-            self.b_years[item] += self.alpha * (error - self.beta * self.b_years[item])
+            self.b_years[item] += self.alpha * (error - self.beta * self.b_years[item])"""
 
             # endregion
             # region update P,Q
@@ -559,7 +559,7 @@ class HybridMFRecommender(Recommender):
         self.build_vote_counts_biases()
         self.build_vote_avg_biases()
         self.build_years_biases()
-        #return
+        return
 
     def build_companies_biases(self):
 
@@ -1156,6 +1156,50 @@ class HybridMFRecommender(Recommender):
             counter += 1
 
         # endregion
+
+    @staticmethod
+    def cross_validation_error(df, combination_of_params, folds, movies_metadata):
+        # Create folds
+        X_folds = np.array_split(df, folds)
+        val_results = []
+
+        for i in range(folds):
+            # Create train, validation for current fold
+            X_val_fold = X_folds[i]
+            X_train_fold = pd.concat([other_df for other_df in X_folds if not other_df.equals(X_val_fold)])
+
+            # Fit the model on the current fold training set
+            model = HybridMFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1], combination_of_params[2], combination_of_params[3], movies_metadata)
+
+            # Evaluate on the fold validation set
+            val_results.append(model.rmse(X_val_fold))
+
+        return np.array(val_results).mean()
+
+    @staticmethod
+    def hyperparameters_tuning(df, movies_metadata):
+        possible_k = [10, 100, 250]
+        possible_alpha = [0.01, 0.1]
+        possible_beta = [0.01, 0.1]
+        possible_iterations = [10, 50, 100]
+
+        list_of_lists = [possible_k, possible_alpha, possible_beta, possible_iterations]
+        all_combinations = list(product(*list_of_lists))
+
+        # shuffle the df
+        df = df.sample(frac=1)
+        mf_rmse_dict = dict()
+        for combination_of_params in all_combinations:
+            mf_rmse_dict[combination_of_params] = HybridMFRecommender.cross_validation_error(df, combination_of_params, 4, movies_metadata)
+
+        keys_list = list(mf_rmse_dict.keys())
+        val_list = list(mf_rmse_dict.values())
+        optimal_mf_rmse = min(val_list)
+        optimal_params = keys_list[val_list.index(optimal_mf_rmse)]
+        print(f'The optimal params for the Hybrid MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
+
+        return optimal_params
+
 
 
 

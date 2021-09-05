@@ -133,7 +133,8 @@ def main():
     start = time.time()
     hybrid_data_transformed, movies_metadata = data_handling_for_hybrid(ratings)
     train, test = train_test_split(hybrid_data_transformed)
-    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 100, 0.01, 0.1, 10, movies_metadata)
+    optimal_params = ex2_312546609_312575970.HybridMFRecommender.hyperparameters_tuning(train, movies_metadata)
+    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3], movies_metadata)
 
     print(
         f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')

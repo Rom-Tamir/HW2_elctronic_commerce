@@ -1,4 +1,4 @@
-import ex2_312546609_312575970
+import Recommenders
 import pandas as pd
 import numpy as np
 import time
@@ -12,13 +12,13 @@ def transform(ratings, min_items=5, min_users=5):
     :param min_users: Minimum users per item
     :return: Transformed DataFrame
     """
-    ratings = ratings.groupby('user').filter(lambda items: len(items) >= min_items)
-    ratings = ratings.groupby('item').filter(lambda users: len(users) >= min_users)
-    unique_users = ratings['user'].unique()
-    unique_items = ratings['item'].unique()
+    ratings = ratings.groupby('userId').filter(lambda items: len(items) >= min_items)
+    ratings = ratings.groupby('movieId').filter(lambda users: len(users) >= min_users)
+    unique_users = ratings['userId'].unique()
+    unique_items = ratings['movieId'].unique()
     user_mapping = {u: k for k, u in enumerate(unique_users)}
     item_mapping = {i: k for k, i in enumerate(unique_items)}
-    ratings = ratings.replace({'user': user_mapping, 'item': item_mapping})
+    ratings = ratings.replace({'userId': user_mapping, 'movieId': item_mapping})
     return ratings
 
 
@@ -30,7 +30,7 @@ def train_test_split(ratings, train_ratio=0.8):
     :return: A tuple of train and test DataFrames
     """
     train, test = [], []
-    for user in ratings.groupby('user'):
+    for user in ratings.groupby('userId'):
         rows = user[1].values.tolist()
         split = int(train_ratio * len(rows))
         indices = np.random.permutation(len(rows))
@@ -47,9 +47,9 @@ def train_test_split(ratings, train_ratio=0.8):
 def data_handling_for_hybrid(transformed_ratings):
     # region transform handling
     original_ratings = pd.read_csv('ratings.csv')
-    original_ratings = original_ratings.groupby('user').filter(lambda items: len(items) >= 5)
-    original_ratings = original_ratings.groupby('item').filter(lambda users: len(users) >= 5)
-    original_movie_ids = original_ratings['item'].tolist()
+    original_ratings = original_ratings.groupby('userId').filter(lambda items: len(items) >= 5)
+    original_ratings = original_ratings.groupby('movieId').filter(lambda users: len(users) >= 5)
+    original_movie_ids = original_ratings['movieId'].tolist()
     transformed_ratings.insert(0, 'original_movie_id', original_movie_ids)
     # endregion
 
@@ -63,7 +63,6 @@ def data_handling_for_hybrid(transformed_ratings):
     movies_metadata['runtime'] = pd.to_numeric(movies_metadata['runtime'], errors='coerce')
     movies_metadata['budget'] = pd.to_numeric(movies_metadata['budget'], errors='coerce')
     movies_metadata['popularity'] = pd.to_numeric(movies_metadata['popularity'], errors='coerce')
-    # movies_metadata['release_date'] = movies_metadata[movies_metadata['release_date'].map(lambda x: type(x) is str and len(x) > 3 and x[-4:].isdigit())]['release_date']
     # endregion
 
     return transformed_ratings, movies_metadata
@@ -71,16 +70,21 @@ def data_handling_for_hybrid(transformed_ratings):
 
 def main():
     ratings = transform(pd.read_csv('ratings.csv'))
-    # train, test = train_test_split(ratings)
+    train, test = train_test_split(ratings)
 
-    """start = time.time()
+    ### ATTENTION: run this code should take ~15 hours with the allocated compute power in the Azure-VM
+
+    ####################################################################################
+
+    # NeighborhoodRecommender
+    start = time.time()
     # cross validation
     train_sample = train.sample(frac=1)
     neighbors_rmse_dict = dict()
     print('neighbors_rmse_dict = {')
     for k in range(1, 150, 2):
-        neighbors_rmse_dict[k] = ex2_312546609_312575970.NeighborhoodRecommender.cross_validation_error(train_sample, k, 5)
-        print(f'{k}: {neighbors_rmse_dict[k]}')
+        neighbors_rmse_dict[k] = Recommenders.NeighborhoodRecommender.cross_validation_error(train_sample, k, 5)
+        print(f'{k}: {neighbors_rmse_dict[k]},')
     print('}')
 
     keys_list = list(neighbors_rmse_dict.keys())
@@ -90,53 +94,46 @@ def main():
     print(f'The optimal number of neighbors according to cross validation is: {optimal_k} and the optimal RMSE is: {optimal_neighbors_rmse}')
 
     # RMSE of test
-    neighborhood_recommender = ex2_312546609_312575970.NeighborhoodRecommender(train, optimal_k)
-    print(f'The Neighborhood Recommender model RMSE on test set, with the optimal k is: {neighborhood_recommender.omer_rmse(test)}')
+    neighborhood_recommender = Recommenders.NeighborhoodRecommender(train, optimal_k)
+    print(f'The Neighborhood Recommender model RMSE on test set, with the optimal k is: {neighborhood_recommender.rmse(test)}')
     print(f'Took {(time.time() - start)/60:.2f} minutes')
     print()
     print("-----------------------------------------------------------------")
     print()
-
-####################################################################################
-
-    start = time.time()
-    ls_recommender = ex2_312546609_312575970.LSRecommender(train)
-    ls_recommender.solve_ls()
-    print(f'The Least Squares Recommender model RMSE is: {ls_recommender.omer_rmse(test)}')
-    print(f'Took {(time.time() - start)/60:.2f} minutes')
-    print()
-    print("-----------------------------------------------------------------")
-    print()"""
 
     ####################################################################################
 
-    """start = time.time()
-    #optimal_params = ex2_312546609_312575970.MFRecommender.hyperparameters_tuning(train)
-    #mf_recommender = ex2_312546609_312575970.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
-    mf_recommender = ex2_312546609_312575970.MFRecommender(train, 200, 0.01, 0.1, 10)
-    original_data = pd.read_csv('ratings.csv')
-    original_data = original_data.groupby('user').filter(lambda items: len(items) >= 5)
-    original_data = original_data.groupby('item').filter(lambda users: len(users) >= 5)
-    original_movies_id = original_data['item'].unique()
-    temp_res = np.where(original_movies_id == 31)
-    print(mf_recommender.b_m[temp_res])
-
-    print(f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {mf_recommender.omer_rmse(test)}')
+    # LSRecommender
+    start = time.time()
+    ls_recommender = Recommenders.LSRecommender(train)
+    ls_recommender.solve_ls()
+    print(f'The Least Squares Recommender model RMSE is: {ls_recommender.rmse(test)}')
     print(f'Took {(time.time() - start)/60:.2f} minutes')
     print()
     print("-----------------------------------------------------------------")
-    print()"""
+    print()
+
+    ####################################################################################
+
+    # MFRecommender
+    start = time.time()
+    optimal_params = Recommenders.MFRecommender.hyperparameters_tuning(train)
+    mf_recommender = Recommenders.MFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3])
+    print(f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {mf_recommender.rmse(test)}')
+    print(f'Took {(time.time() - start)/60:.2f} minutes')
+    print()
+    print("-----------------------------------------------------------------")
+    print()
 
     #####################################################################################
 
+    # HybridMFRecommender
     start = time.time()
     hybrid_data_transformed, movies_metadata = data_handling_for_hybrid(ratings)
     train, test = train_test_split(hybrid_data_transformed)
-    # optimal_params = ex2_312546609_312575970.HybridMFRecommender.hyperparameters_tuning(train, movies_metadata)
-    # hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3], movies_metadata)
-    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 200, 0.01, 0.1, 100, movies_metadata)
-    print(
-        f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')
+    optimal_params = Recommenders.HybridMFRecommender.hyperparameters_tuning(train, movies_metadata)
+    hybrid_mf_recommender = Recommenders.HybridMFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3], movies_metadata)
+    print(f'The Hybrid Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')
     print(f'Took {(time.time() - start) / 60:.2f} minutes')
 
 

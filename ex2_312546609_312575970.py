@@ -43,7 +43,8 @@ class Recommender(abc.ABC):
 
         sum_rmse = 0
         for idx in range(len(user_col)):
-            sum_rmse += (rating_col[idx] - self.predict(int(user_col[idx]), int(item_col[idx]), int(timestamp_col[idx]))) ** 2
+            sum_rmse += (rating_col[idx] - self.predict(int(user_col[idx]), int(item_col[idx]),
+                                                        int(timestamp_col[idx]))) ** 2
 
         if len(user_col) != 0:
             rmse = np.sqrt((1 / len(user_col)) * sum_rmse)
@@ -64,7 +65,6 @@ class BaselineRecommender(Recommender):
             r_item = list(ratings[ratings['item'] == item_idx]['rating'])
             avg_item = sum(r_item) / len(r_item)
             self.b_i_dict[item_idx] = avg_item - self.r_matrix_avg
-
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -114,11 +114,14 @@ class NeighborhoodRecommender(Recommender):
                         continue
                     user_1_rating_consider = self.r_wave_matrix[int(user_idx)][mutual_items]
                     user_2_rating_consider = self.r_wave_matrix[int(other_user_idx)][mutual_items]
-                    self.similarity_dict[(user_idx, other_user_idx)] = np.inner(user_1_rating_consider, user_2_rating_consider) / (np.linalg.norm(user_1_rating_consider) * np.linalg.norm(user_2_rating_consider))
+                    self.similarity_dict[(user_idx, other_user_idx)] = np.inner(user_1_rating_consider,
+                                                                                user_2_rating_consider) / (
+                                                                               np.linalg.norm(
+                                                                                   user_1_rating_consider) * np.linalg.norm(
+                                                                           user_2_rating_consider))
                     self.similarity_dict[(other_user_idx, user_idx)] = self.similarity_dict[(user_idx, other_user_idx)]
 
         self.r_matrix = ratings
-
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -199,11 +202,11 @@ class LSRecommender(Recommender):
         b_w_indicator = 1 if 3 < dt.weekday() < 6 else 0
         b_d_indicator = 1 if 6 <= dt.hour < 18 else 0
         b_n_indicator = 1 if b_d_indicator == 0 else 0
-        pred = self.r_matrix_avg + self.sol[int(user)] + self.sol[int(self.n_users + item)] + b_w_indicator*self.sol[-1] + b_d_indicator*self.sol[-3] + b_n_indicator*self.sol[-2]
+        pred = self.r_matrix_avg + self.sol[int(user)] + self.sol[int(self.n_users + item)] + b_w_indicator * self.sol[
+            -1] + b_d_indicator * self.sol[-3] + b_n_indicator * self.sol[-2]
         return pred if 0.5 <= pred <= 5 else 0.5 if pred < 0.5 else 5
 
     def solve_ls(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
         """
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
@@ -305,7 +308,7 @@ class MFRecommender(Recommender):
         """
         Perform stochastic graident descent
         """
-        #print(f"SGD num: {self.count}")
+        # print(f"SGD num: {self.count}")
         self.count += 1
         for user, item, rating in self.samples:
             # Computer prediction and error
@@ -327,7 +330,8 @@ class MFRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.P[int(user), :].dot(
+            self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -338,8 +342,8 @@ class MFRecommender(Recommender):
         predicted_matrix = self.full_matrix()
         error = 0
         for x, y in zip(xs, ys):
-            error += (self.r_matrix[x, y] - predicted_matrix[x, y])**2
-        return error**0.5
+            error += (self.r_matrix[x, y] - predicted_matrix[x, y]) ** 2
+        return error ** 0.5
 
     def full_matrix(self):
         """
@@ -359,7 +363,8 @@ class MFRecommender(Recommender):
             X_train_fold = pd.concat([other_df for other_df in X_folds if not other_df.equals(X_val_fold)])
 
             # Fit the model on the current fold training set
-            model = MFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1], combination_of_params[2], combination_of_params[3])
+            model = MFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1],
+                                  combination_of_params[2], combination_of_params[3])
 
             # Evaluate on the fold validation set
             val_results.append(model.rmse(X_val_fold))
@@ -386,7 +391,8 @@ class MFRecommender(Recommender):
         val_list = list(mf_rmse_dict.values())
         optimal_mf_rmse = min(val_list)
         optimal_params = keys_list[val_list.index(optimal_mf_rmse)]
-        print(f'The optimal params for the MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
+        print(
+            f'The optimal params for the MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
 
         return optimal_params
 
@@ -527,7 +533,10 @@ class HybridMFRecommender(Recommender):
         :param item: Item identifier
         :return: Predicted rating of the user for the item
         """
-        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.b_revenue[item] + self.b_budget[item] + self.b_popularity[item] + self.b_vote_count[item] + self.b_vote_avg[item] + self.b_years[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
+        predicted_rating = self.r_matrix_avg + self.b_u[int(user)] + self.b_m[int(item)] + self.b_company[item] + \
+                           self.b_genre[item] + self.b_spoken[item] + self.b_runtime[item] + self.b_revenue[item] + \
+                           self.b_budget[item] + self.b_popularity[item] + self.b_vote_count[item] + self.b_vote_avg[
+                               item] + self.b_years[item] + self.P[int(user), :].dot(self.Q[int(item), :].T)
         return predicted_rating if 0.5 <= predicted_rating <= 5 else 0.5 if predicted_rating < 0.5 else 5
 
     def mf_rmse(self):
@@ -546,18 +555,19 @@ class HybridMFRecommender(Recommender):
         Computer the full matrix using the resultant biases, P and Q
         """
         return self.r_matrix_avg + self.b_u[:, np.newaxis] + self.b_m[np.newaxis:, ] + self.P.dot(self.Q.T)
-    #aaa
+
+    # aaa
     def build_biases(self):
         self.build_companies_biases()
         self.build_genres_biases()
         self.build_countries_biases()
         self.build_spoken_languages_biases()
-        self.build_runtimes_biases()
-        self.build_revenues_biases()
-        self.build_budgets_biases()
-        self.build_popularity_biases()
-        self.build_vote_counts_biases()
-        self.build_vote_avg_biases()
+        # self.build_runtimes_biases()
+        # self.build_revenues_biases()
+        # self.build_budgets_biases()
+        # self.build_popularity_biases()
+        # self.build_vote_counts_biases()
+        # self.build_vote_avg_biases()
         self.build_years_biases()
         return
 
@@ -677,8 +687,9 @@ class HybridMFRecommender(Recommender):
             country_str = row["production_countries"]
             country_dict = ast.literal_eval(country_str)
             for country in country_dict:
-                countries_rating_dict[country["name"]] = countries_rating_dict.get(country["name"], 0) + movie_id_avg_rating_dict[
-                    movie_id]
+                countries_rating_dict[country["name"]] = countries_rating_dict.get(country["name"], 0) + \
+                                                         movie_id_avg_rating_dict[
+                                                             movie_id]
                 counter_dict[country["name"]] = counter_dict.get(country["name"], 0) + 1
         # endregion
 
@@ -725,8 +736,9 @@ class HybridMFRecommender(Recommender):
             language_str = row["spoken_languages"]
             language_dict = ast.literal_eval(language_str)
             for language in language_dict:
-                languages_rating_dict[language["name"]] = languages_rating_dict.get(language["name"], 0) + movie_id_avg_rating_dict[
-                    movie_id]
+                languages_rating_dict[language["name"]] = languages_rating_dict.get(language["name"], 0) + \
+                                                          movie_id_avg_rating_dict[
+                                                              movie_id]
                 languages_dict[language["name"]] = languages_dict.get(language["name"], 0) + 1
         # endregion
 
@@ -734,7 +746,8 @@ class HybridMFRecommender(Recommender):
         keys_list = list(languages_rating_dict.keys())
         languages_bias_dict = {}
         for language in keys_list:
-            languages_bias_dict[language] = (languages_rating_dict[language] / languages_dict[language]) - self.r_matrix_avg
+            languages_bias_dict[language] = (languages_rating_dict[language] / languages_dict[
+                language]) - self.r_matrix_avg
         # endregion
 
         # region build b_spoken (movie id as index)
@@ -774,13 +787,16 @@ class HybridMFRecommender(Recommender):
             if runtime == 0:
                 continue
             elif runtime > 135:
-                runtimes_rating_dict["long movie"] = runtimes_rating_dict.get("long movie", 0) + movie_id_avg_rating_dict[movie_id]
+                runtimes_rating_dict["long movie"] = runtimes_rating_dict.get("long movie", 0) + \
+                                                     movie_id_avg_rating_dict[movie_id]
                 counter_dict["long movie"] = counter_dict.get("long movie", 0) + 1
             elif runtime > 80:
-                runtimes_rating_dict["medium movie length"] = runtimes_rating_dict.get("medium movie length", 0) + movie_id_avg_rating_dict[movie_id]
+                runtimes_rating_dict["medium movie length"] = runtimes_rating_dict.get("medium movie length", 0) + \
+                                                              movie_id_avg_rating_dict[movie_id]
                 counter_dict["medium movie length"] = counter_dict.get("medium movie length", 0) + 1
             else:
-                runtimes_rating_dict["short movie"] = runtimes_rating_dict.get("short movie", 0) + movie_id_avg_rating_dict[movie_id]
+                runtimes_rating_dict["short movie"] = runtimes_rating_dict.get("short movie", 0) + \
+                                                      movie_id_avg_rating_dict[movie_id]
                 counter_dict["short movie"] = counter_dict.get("short movie", 0) + 1
         # endregion
 
@@ -799,7 +815,8 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_runtime = movie_metadata["runtime"].values[0]
-            self.b_runtime[counter] = runtimes_biases_dict['long movie'] if movie_runtime > 135 else runtimes_biases_dict['medium movie length'] if movie_runtime > 80 else runtimes_biases_dict['short movie']
+            self.b_runtime[counter] = runtimes_biases_dict['long movie'] if movie_runtime > 135 else \
+                runtimes_biases_dict['medium movie length'] if movie_runtime > 80 else runtimes_biases_dict['short movie']
             counter += 1
 
         # endregion
@@ -825,13 +842,16 @@ class HybridMFRecommender(Recommender):
             if revenue == 0:
                 continue
             elif revenue > 180000000:
-                revenues_rating_dict["high revenue"] = revenues_rating_dict.get("high revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                revenues_rating_dict["high revenue"] = revenues_rating_dict.get("high revenue", 0) + \
+                                                       movie_id_avg_rating_dict[movie_id]
                 counter_dict["high revenue"] = counter_dict.get("high revenue", 0) + 1
             elif revenue > 4000000:
-                revenues_rating_dict["medium revenue"] = revenues_rating_dict.get("medium revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                revenues_rating_dict["medium revenue"] = revenues_rating_dict.get("medium revenue", 0) + \
+                                                         movie_id_avg_rating_dict[movie_id]
                 counter_dict["medium revenue"] = counter_dict.get("medium revenue", 0) + 1
             else:
-                revenues_rating_dict["low revenue"] = revenues_rating_dict.get("low revenue", 0) + movie_id_avg_rating_dict[movie_id]
+                revenues_rating_dict["low revenue"] = revenues_rating_dict.get("low revenue", 0) + \
+                                                      movie_id_avg_rating_dict[movie_id]
                 counter_dict["low revenue"] = counter_dict.get("low revenue", 0) + 1
         # endregion
 
@@ -850,7 +870,8 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_revenue = movie_metadata["revenue"].values[0]
-            self.b_revenue[counter] = revenues_biases_dict['high revenue'] if movie_revenue > 180000000 else revenues_biases_dict['medium revenue'] if movie_revenue > 4000000 else revenues_biases_dict['low revenue']
+            self.b_revenue[counter] = revenues_biases_dict['high revenue'] if movie_revenue > 180000000 else \
+                revenues_biases_dict['medium revenue'] if movie_revenue > 4000000 else revenues_biases_dict['low revenue']
             counter += 1
 
         # endregion
@@ -876,13 +897,16 @@ class HybridMFRecommender(Recommender):
             if budget == 0:
                 continue
             elif budget > 54000000:
-                budgets_rating_dict["high budget"] = budgets_rating_dict.get("high budget", 0) + movie_id_avg_rating_dict[movie_id]
+                budgets_rating_dict["high budget"] = budgets_rating_dict.get("high budget", 0) + \
+                                                     movie_id_avg_rating_dict[movie_id]
                 counter_dict["high budget"] = counter_dict.get("high budget", 0) + 1
             elif budget > 2000000:
-                budgets_rating_dict["medium budget"] = budgets_rating_dict.get("medium budget", 0) + movie_id_avg_rating_dict[movie_id]
+                budgets_rating_dict["medium budget"] = budgets_rating_dict.get("medium budget", 0) + \
+                                                       movie_id_avg_rating_dict[movie_id]
                 counter_dict["medium budget"] = counter_dict.get("medium budget", 0) + 1
             else:
-                budgets_rating_dict["low budget"] = budgets_rating_dict.get("low budget", 0) + movie_id_avg_rating_dict[movie_id]
+                budgets_rating_dict["low budget"] = budgets_rating_dict.get("low budget", 0) + movie_id_avg_rating_dict[
+                    movie_id]
                 counter_dict["low budget"] = counter_dict.get("low budget", 0) + 1
         # endregion
 
@@ -901,7 +925,8 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_budget = movie_metadata["budget"].values[0]
-            self.b_budget[counter] = budgets_biases_dict['high budget'] if movie_budget > 54000000 else budgets_biases_dict['medium budget'] if movie_budget > 2000000 else budgets_biases_dict['low budget']
+            self.b_budget[counter] = budgets_biases_dict['high budget'] if movie_budget > 54000000 else \
+                budgets_biases_dict['medium budget'] if movie_budget > 2000000 else budgets_biases_dict['low budget']
             counter += 1
 
         # endregion
@@ -928,7 +953,7 @@ class HybridMFRecommender(Recommender):
                 continue
             elif popularity > 15:
                 popularity_rating_dict["very high popularity"] = popularity_rating_dict.get("very high popularity", 0) + \
-                                                             movie_id_avg_rating_dict[movie_id]
+                                                                 movie_id_avg_rating_dict[movie_id]
                 counter_dict["very high popularity"] = counter_dict.get("very high popularity", 0) + 1
             elif popularity > 10:
                 popularity_rating_dict["high popularity"] = popularity_rating_dict.get("high popularity", 0) + \
@@ -952,7 +977,8 @@ class HybridMFRecommender(Recommender):
         keys_list = list(popularity_rating_dict.keys())
         popularity_biases_dict = {}
         for popularity in keys_list:
-            popularity_biases_dict[popularity] = (popularity_rating_dict[popularity] / counter_dict[popularity]) - self.r_matrix_avg
+            popularity_biases_dict[popularity] = (popularity_rating_dict[popularity] / counter_dict[
+                popularity]) - self.r_matrix_avg
         # endregion
 
         # region build b_popularity (movie id as index)
@@ -963,7 +989,10 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_popularity = movie_metadata["popularity"].values[0]
-            self.b_popularity[counter] = popularity_biases_dict['very high popularity'] if movie_popularity > 15 else popularity_biases_dict['high popularity'] if movie_popularity > 10 else popularity_biases_dict['medium popularity'] if movie_popularity > 5 else popularity_biases_dict['low popularity'] if movie_popularity > 1 else popularity_biases_dict['very low popularity']
+            self.b_popularity[counter] = popularity_biases_dict['very high popularity'] if movie_popularity > 15 else \
+                popularity_biases_dict['high popularity'] if movie_popularity > 10 else popularity_biases_dict[
+                    'medium popularity'] if movie_popularity > 5 else popularity_biases_dict[
+                    'low popularity'] if movie_popularity > 1 else popularity_biases_dict['very low popularity']
             counter += 1
 
         # endregion
@@ -989,13 +1018,16 @@ class HybridMFRecommender(Recommender):
             if vote_count == 0:
                 continue
             elif vote_count > 550:
-                votes_count_rating_dict["high vote_count"] = votes_count_rating_dict.get("high vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_count_rating_dict["high vote_count"] = votes_count_rating_dict.get("high vote_count", 0) + \
+                                                             movie_id_avg_rating_dict[movie_id]
                 counter_dict["high vote_count"] = counter_dict.get("high vote_count", 0) + 1
             elif vote_count > 5:
-                votes_count_rating_dict["medium vote_count"] = votes_count_rating_dict.get("medium vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_count_rating_dict["medium vote_count"] = votes_count_rating_dict.get("medium vote_count", 0) + \
+                                                               movie_id_avg_rating_dict[movie_id]
                 counter_dict["medium vote_count"] = counter_dict.get("medium vote_count", 0) + 1
             else:
-                votes_count_rating_dict["low vote_count"] = votes_count_rating_dict.get("low vote_count", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_count_rating_dict["low vote_count"] = votes_count_rating_dict.get("low vote_count", 0) + \
+                                                            movie_id_avg_rating_dict[movie_id]
                 counter_dict["low vote_count"] = counter_dict.get("low vote_count", 0) + 1
         # endregion
 
@@ -1003,7 +1035,8 @@ class HybridMFRecommender(Recommender):
         keys_list = list(votes_count_rating_dict.keys())
         votes_count_biases_dict = {}
         for vote_count in keys_list:
-            votes_count_biases_dict[vote_count] = (votes_count_rating_dict[vote_count] / counter_dict[vote_count]) - self.r_matrix_avg
+            votes_count_biases_dict[vote_count] = (votes_count_rating_dict[vote_count] / counter_dict[
+                vote_count]) - self.r_matrix_avg
         # endregion
 
         # region build b_vote_count (movie id as index)
@@ -1014,7 +1047,9 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_vote_count = movie_metadata["vote_count"].values[0]
-            self.b_vote_count[counter] = votes_count_biases_dict['high vote_count'] if movie_vote_count > 550 else votes_count_biases_dict['medium vote_count'] if movie_vote_count > 5 else votes_count_biases_dict['low vote_count']
+            self.b_vote_count[counter] = votes_count_biases_dict['high vote_count'] if movie_vote_count > 550 else \
+                votes_count_biases_dict['medium vote_count'] if movie_vote_count > 5 else votes_count_biases_dict[
+                    'low vote_count']
             counter += 1
 
         # endregion
@@ -1040,13 +1075,16 @@ class HybridMFRecommender(Recommender):
             if vote_average == 0:
                 continue
             elif vote_average > 7.5:
-                votes_avg_rating_dict["high vote_average"] = votes_avg_rating_dict.get("high vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_avg_rating_dict["high vote_average"] = votes_avg_rating_dict.get("high vote_average", 0) + \
+                                                             movie_id_avg_rating_dict[movie_id]
                 counter_dict["high vote_average"] = counter_dict.get("high vote_average", 0) + 1
             elif vote_average > 5:
-                votes_avg_rating_dict["medium vote_average"] = votes_avg_rating_dict.get("medium vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_avg_rating_dict["medium vote_average"] = votes_avg_rating_dict.get("medium vote_average", 0) + \
+                                                               movie_id_avg_rating_dict[movie_id]
                 counter_dict["medium vote_average"] = counter_dict.get("medium vote_average", 0) + 1
             else:
-                votes_avg_rating_dict["low vote_average"] = votes_avg_rating_dict.get("low vote_average", 0) + movie_id_avg_rating_dict[movie_id]
+                votes_avg_rating_dict["low vote_average"] = votes_avg_rating_dict.get("low vote_average", 0) + \
+                                                            movie_id_avg_rating_dict[movie_id]
                 counter_dict["low vote_average"] = counter_dict.get("low vote_average", 0) + 1
         # endregion
 
@@ -1054,7 +1092,8 @@ class HybridMFRecommender(Recommender):
         keys_list = list(votes_avg_rating_dict.keys())
         votes_avg_biases_dict = {}
         for vote_average in keys_list:
-            votes_avg_biases_dict[vote_average] = (votes_avg_rating_dict[vote_average] / counter_dict[vote_average]) - self.r_matrix_avg
+            votes_avg_biases_dict[vote_average] = (votes_avg_rating_dict[vote_average] / counter_dict[
+                vote_average]) - self.r_matrix_avg
         # endregion
 
         # region build b_vote_avg (movie id as index)
@@ -1065,7 +1104,9 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_vote_avg = movie_metadata["vote_average"].values[0]
-            self.b_vote_avg[counter] = votes_avg_biases_dict['high vote_average'] if movie_vote_avg > 7.5 else votes_avg_biases_dict['medium vote_average'] if movie_vote_avg > 5 else votes_avg_biases_dict['low vote_average']
+            self.b_vote_avg[counter] = votes_avg_biases_dict['high vote_average'] if movie_vote_avg > 7.5 else \
+                votes_avg_biases_dict['medium vote_average'] if movie_vote_avg > 5 else votes_avg_biases_dict[
+                    'low vote_average']
             counter += 1
 
         # endregion
@@ -1089,7 +1130,8 @@ class HybridMFRecommender(Recommender):
             movie_id = row["id"]
             release_date = row["release_date"]
 
-            if type(release_date) is str and len(release_date) > 3 and release_date[-4:].isdigit() and 0 < int(release_date[-4:]) < 2022:
+            if type(release_date) is str and len(release_date) > 3 and release_date[-4:].isdigit() and 0 < int(
+                    release_date[-4:]) < 2022:
                 release_date = int(release_date[-4:])
             else:
                 continue
@@ -1136,7 +1178,8 @@ class HybridMFRecommender(Recommender):
         keys_list = list(years_rating_dict.keys())
         years_biases_dict = {}
         for release_date in keys_list:
-            years_biases_dict[release_date] = (years_rating_dict[release_date] / counter_dict[release_date]) - self.r_matrix_avg
+            years_biases_dict[release_date] = (years_rating_dict[release_date] / counter_dict[
+                release_date]) - self.r_matrix_avg
         # endregion
 
         # region build b_years (movie id as index)
@@ -1147,12 +1190,19 @@ class HybridMFRecommender(Recommender):
                 counter += 1
                 continue
             movie_year_raw = movie_metadata["release_date"].values[0]
-            if type(movie_year_raw) is str and len(movie_year_raw) > 3 and movie_year_raw[-4:].isdigit() and 0 < int(movie_year_raw[-4:]) < 2022:
+            if type(movie_year_raw) is str and len(movie_year_raw) > 3 and movie_year_raw[-4:].isdigit() and 0 < int(
+                    movie_year_raw[-4:]) < 2022:
                 movie_year = int(movie_year_raw[-4:])
             else:
                 counter += 1
                 continue
-            self.b_years[counter] = years_biases_dict["2010's"] if movie_year > 2009 else years_biases_dict["2000's"] if movie_year > 1999 else years_biases_dict["1990's"] if movie_year > 1989 else years_biases_dict["1980's"] if movie_year > 1979 else years_biases_dict["1970's"] if movie_year > 1969 else years_biases_dict["1960's"] if movie_year > 1959 else years_biases_dict["1950's"] if movie_year > 1949 else years_biases_dict["1940's"] if movie_year > 1939 else years_biases_dict["1930's"] if movie_year > 1929 else years_biases_dict["1920's"] if movie_year > 1919 else years_biases_dict["1910's"] if movie_year > 1909 else years_biases_dict["1900's"]
+            self.b_years[counter] = years_biases_dict["2010's"] if movie_year > 2009 else years_biases_dict[
+                "2000's"] if movie_year > 1999 else years_biases_dict["1990's"] if movie_year > 1989 else \
+                years_biases_dict["1980's"] if movie_year > 1979 else years_biases_dict["1970's"] if movie_year > 1969 else \
+                    years_biases_dict["1960's"] if movie_year > 1959 else years_biases_dict["1950's"] if movie_year > 1949 else \
+                        years_biases_dict["1940's"] if movie_year > 1939 else years_biases_dict["1930's"] if movie_year > 1929 else \
+                            years_biases_dict["1920's"] if movie_year > 1919 else years_biases_dict["1910's"] if movie_year > 1909 else \
+                                years_biases_dict["1900's"]
             counter += 1
 
         # endregion
@@ -1169,7 +1219,8 @@ class HybridMFRecommender(Recommender):
             X_train_fold = pd.concat([other_df for other_df in X_folds if not other_df.equals(X_val_fold)])
 
             # Fit the model on the current fold training set
-            model = HybridMFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1], combination_of_params[2], combination_of_params[3], movies_metadata)
+            model = HybridMFRecommender(X_train_fold, combination_of_params[0], combination_of_params[1],
+                                        combination_of_params[2], combination_of_params[3], movies_metadata)
 
             # Evaluate on the fold validation set
             val_results.append(model.rmse(X_val_fold))
@@ -1190,17 +1241,17 @@ class HybridMFRecommender(Recommender):
         df = df.sample(frac=1)
         mf_rmse_dict = dict()
         for combination_of_params in all_combinations:
-            mf_rmse_dict[combination_of_params] = HybridMFRecommender.cross_validation_error(df, combination_of_params, 4, movies_metadata)
+            mf_rmse_dict[combination_of_params] = HybridMFRecommender.cross_validation_error(df, combination_of_params,
+                                                                                             4, movies_metadata)
 
         keys_list = list(mf_rmse_dict.keys())
         val_list = list(mf_rmse_dict.values())
         optimal_mf_rmse = min(val_list)
         optimal_params = keys_list[val_list.index(optimal_mf_rmse)]
-        print(f'The optimal params for the Hybrid MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
+        print(
+            f'The optimal params for the Hybrid MF Recommender according to cross validation is: {optimal_params} and the optimal RMSE is: {optimal_mf_rmse}')
 
         return optimal_params
-
-
 
 
 class mf_params:
@@ -1209,5 +1260,3 @@ class mf_params:
         self.P = np.copy(P)
         self.b_u = np.copy(b_u)
         self.b_m = np.copy(b_m)
-
-

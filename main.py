@@ -45,7 +45,6 @@ def train_test_split(ratings, train_ratio=0.8):
 
 
 def data_handling_for_hybrid(transformed_ratings):
-
     # region transform handling
     original_ratings = pd.read_csv('ratings.csv')
     original_ratings = original_ratings.groupby('user').filter(lambda items: len(items) >= 5)
@@ -64,7 +63,7 @@ def data_handling_for_hybrid(transformed_ratings):
     movies_metadata['runtime'] = pd.to_numeric(movies_metadata['runtime'], errors='coerce')
     movies_metadata['budget'] = pd.to_numeric(movies_metadata['budget'], errors='coerce')
     movies_metadata['popularity'] = pd.to_numeric(movies_metadata['popularity'], errors='coerce')
-    #movies_metadata['release_date'] = movies_metadata[movies_metadata['release_date'].map(lambda x: type(x) is str and len(x) > 3 and x[-4:].isdigit())]['release_date']
+    # movies_metadata['release_date'] = movies_metadata[movies_metadata['release_date'].map(lambda x: type(x) is str and len(x) > 3 and x[-4:].isdigit())]['release_date']
     # endregion
 
     return transformed_ratings, movies_metadata
@@ -72,7 +71,7 @@ def data_handling_for_hybrid(transformed_ratings):
 
 def main():
     ratings = transform(pd.read_csv('ratings.csv'))
-    #train, test = train_test_split(ratings)
+    # train, test = train_test_split(ratings)
 
     """start = time.time()
     # cross validation
@@ -133,9 +132,9 @@ def main():
     start = time.time()
     hybrid_data_transformed, movies_metadata = data_handling_for_hybrid(ratings)
     train, test = train_test_split(hybrid_data_transformed)
-    optimal_params = ex2_312546609_312575970.HybridMFRecommender.hyperparameters_tuning(train, movies_metadata)
-    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3], movies_metadata)
-
+    # optimal_params = ex2_312546609_312575970.HybridMFRecommender.hyperparameters_tuning(train, movies_metadata)
+    # hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, optimal_params[0], optimal_params[1], optimal_params[2], optimal_params[3], movies_metadata)
+    hybrid_mf_recommender = ex2_312546609_312575970.HybridMFRecommender(train, 200, 0.01, 0.1, 100, movies_metadata)
     print(
         f'The Matrix Factorization Recommender model RMSE on test set, with the optimal params is: {hybrid_mf_recommender.rmse(test)}')
     print(f'Took {(time.time() - start) / 60:.2f} minutes')
